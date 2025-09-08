@@ -427,6 +427,85 @@ bot.hears('📋 Мои заказы', async (ctx) => {
   }
 });
 
+// Order cancellation handlers
+bot.action(/cancel_order_(\d+)/, async (ctx) => {
+  const orderId = parseInt(ctx.match[1]);
+  const user = ctx.state.user as User;
+  
+  try {
+    // Get order details
+    const order = await db.getOrderWithItems(orderId);
+    if (!order) {
+      await ctx.answerCbQuery('Заказ не найден');
+      return;
+    }
+    
+    // Check if user can cancel this order
+    if (order.customer_id !== user.user_id && !['seller_left', 'seller_right'].includes(user.role)) {
+      await ctx.answerCbQuery('Нет прав для отмены этого заказа');
+      return;
+    }
+    
+    // Check if order can be cancelled
+    if (!['pending', 'preparing'].includes(order.status)) {
+      await ctx.answerCbQuery('Этот заказ нельзя отменить');
+      return;
+    }
+    
+    // Confirm cancellation
+    const keyboard = Markup.inlineKeyboard([
+      [Markup.button.callback('✅ Да, отменить', `confirm_cancel_${orderId}`)],
+      [Markup.button.callback('❌ Нет, вернуться', 'cancel_cancellation')]
+    ]);
+    
+    await ctx.editMessageText(
+      `❓ Вы уверены, что хотите отменить заказ #${orderId}?\n\n` +
+      `💰 Сумма: ${formatPrice(order.total_amount)}\n` +
+      `📊 Статус: ${getStatusText(order.status)}`,
+      keyboard
+    );
+    
+  } catch (error) {
+    console.error('Error showing cancel confirmation:', error);
+    await ctx.answerCbQuery('Произошла ошибка');
+  }
+});
+
+bot.action(/confirm_cancel_(\d+)/, async (ctx) => {
+  const orderId = parseInt(ctx.match[1]);
+  const user = ctx.state.user as User;
+  
+  try {
+    const success = await db.cancelOrder(orderId);
+    
+    if (success) {
+      await ctx.editMessageText(
+        `✅ Заказ #${orderId} успешно отменен.`
+      );
+      
+      // Notify relevant parties about cancellation
+      const order = await db.getOrderWithItems(orderId);
+      if (order && user.role === 'customer') {
+        console.log(`Customer cancelled order #${orderId}`);
+      } else if (order && ['seller_left', 'seller_right'].includes(user.role)) {
+        console.log(`Seller ${user.role} cancelled order #${orderId}`);
+        // TODO: Notify customer about seller cancellation
+      }
+      
+    } else {
+      await ctx.editMessageText('❌ Не удалось отменить заказ. Попробуйте позже.');
+    }
+    
+  } catch (error) {
+    console.error('Error cancelling order:', error);
+    await ctx.editMessageText('❌ Произошла ошибка при отмене заказа.');
+  }
+});
+
+bot.action('cancel_cancellation', async (ctx) => {
+  await ctx.editMessageText('❌ Отмена заказа отменена.');
+});
+
 // Seller functions
 async function showSellerMainMenu(ctx: Context) {
   const keyboard = Markup.keyboard([
@@ -450,7 +529,8 @@ bot.hears('📥 Новые заказы', async (ctx) => {
   
   for (const order of orders) {
     const keyboard = Markup.inlineKeyboard([
-      [Markup.button.callback('👨‍🍳 Взять в работу', `take_order_${order.id}`)]
+      [Markup.button.callback('👨‍🍳 Взять в работу', `take_order_${order.id}`)],
+      [Markup.button.callback('❌ Отменить заказ', `cancel_order_${order.id}`)]
     ]);
     
     await ctx.reply(formatOrder(order), keyboard);
@@ -471,7 +551,8 @@ bot.hears('👨‍🍳 В работе', async (ctx) => {
   
   for (const order of preparingOrders) {
     const keyboard = Markup.inlineKeyboard([
-      [Markup.button.callback('✅ Готово', `ready_order_${order.id}`)]
+      [Markup.button.callback('✅ Готово', `ready_order_${order.id}`)],
+      [Markup.button.callback('❌ Отменить заказ', `cancel_order_${order.id}`)]
     ]);
     
     await ctx.reply(formatOrder(order), keyboard);
