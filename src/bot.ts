@@ -617,7 +617,7 @@ bot.action(/ready_order_(\d+)/, async (ctx) => {
         try {
           await bot.telegram.sendMessage(
             order.customer_id,
-            `🔔 Ваш заказ #${order.id} готов к получению!\n📍 ${order.pickup_location === 'left_buffer' ? 'Левый буфет' : 'Правый буфет'}`
+            `🔔 Ваш заказ готов к получению!\n\n${formatOrder(order)}`
           );
         } catch (error) {
           console.log('Could not notify customer:', error);
