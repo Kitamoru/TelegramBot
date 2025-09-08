@@ -395,13 +395,36 @@ bot.hears('📋 Мои заказы', async (ctx) => {
     return;
   }
   
-  let text = '📋 Ваши заказы:\n\n';
-  for (const order of orders.slice(0, 10)) { // Show last 10 orders
-    text += `Заказ #${order.id} - ${getStatusText(order.status)} - ${formatPrice(order.total_amount)}\n`;
-    text += `${new Date(order.created_at).toLocaleDateString('ru')}\n\n`;
+  // Show active orders with action buttons
+  const activeOrders = orders.filter(o => ['pending', 'preparing'].includes(o.status));
+  const otherOrders = orders.filter(o => !['pending', 'preparing'].includes(o.status));
+  
+  if (activeOrders.length > 0) {
+    await ctx.reply('📋 Активные заказы:');
+    
+    for (const order of activeOrders) {
+      const orderWithItems = await db.getOrderWithItems(order.id);
+      if (orderWithItems) {
+        const canCancel = ['pending', 'preparing'].includes(order.status);
+        
+        const keyboard = canCancel ? 
+          Markup.inlineKeyboard([
+            [Markup.button.callback('❌ Отменить заказ', `cancel_order_${order.id}`)]
+          ]) : undefined;
+        
+        await ctx.reply(formatOrder(orderWithItems), keyboard);
+      }
+    }
   }
   
-  await ctx.reply(text);
+  if (otherOrders.length > 0) {
+    let text = '📋 История заказов:\n\n';
+    for (const order of otherOrders.slice(0, 10)) {
+      text += `Заказ #${order.id} - ${getStatusText(order.status)} - ${formatPrice(order.total_amount)}\n`;
+      text += `${new Date(order.created_at).toLocaleDateString('ru')}\n\n`;
+    }
+    await ctx.reply(text);
+  }
 });
 
 // Seller functions
