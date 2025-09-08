@@ -1,5 +1,4 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
-// import { webhookCallback } from 'telegraf';
 import bot from '../src/bot';
 
 // Validate webhook (basic security)
