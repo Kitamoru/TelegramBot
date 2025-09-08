@@ -8,6 +8,7 @@
     "start": "node dist/src/dev.js",
     "set-webhook": "ts-node scripts/set-webhook.ts",
     "webhook-info": "ts-node scripts/get-webhook-info.ts",
+    "check-webhook": "ts-node scripts/check-webhook.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
