@@ -111,6 +111,18 @@ bot.use(async (ctx, next) => {
       full_name: ctx.from.first_name + (ctx.from.last_name ? ` ${ctx.from.last_name}` : ''),
       role: 'customer'
     });
+    
+    // If user creation failed, create a temporary user object
+    if (!user) {
+      user = {
+        user_id: userId,
+        username: ctx.from.username,
+        full_name: ctx.from.first_name + (ctx.from.last_name ? ` ${ctx.from.last_name}` : ''),
+        role: 'customer',
+        created_at: new Date().toISOString()
+      };
+      console.log('Using temporary user object for:', userId);
+    }
   }
   
   ctx.state.user = user;

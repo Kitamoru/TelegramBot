@@ -10,18 +10,33 @@ export class DatabaseService {
   // User operations
   async createOrUpdateUser(userData: Partial<User>): Promise<User | null> {
     try {
-      const { data, error } = await supabase
+      // First try to insert
+      const { data: insertData, error: insertError } = await supabase
         .from('profiles')
-        .upsert(userData, { onConflict: 'user_id' })
+        .insert(userData)
         .select()
         .single();
 
-      if (error) {
-        console.error('Error creating/updating user:', error);
-        return null;
+      if (!insertError) {
+        return insertData;
       }
 
-      return data;
+      // If insert fails due to duplicate, try update
+      if (insertError.code === '23505') { // unique violation
+        const { data: updateData, error: updateError } = await supabase
+          .from('profiles')
+          .update(userData)
+          .eq('user_id', userData.user_id)
+          .select()
+          .single();
+
+        if (!updateError) {
+          return updateData;
+        }
+      }
+
+      console.error('Error creating/updating user:', insertError);
+      return null;
     } catch (error) {
       console.error('Exception in createOrUpdateUser:', error);
       return null;
