@@ -1,0 +1,13 @@
+{
+  "functions": {
+    "api/bot.ts": {
+      "runtime": "@vercel/node"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/bot",
+      "destination": "/api/bot"
+    }
+  ]
+}
