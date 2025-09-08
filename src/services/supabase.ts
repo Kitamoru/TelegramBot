@@ -3,12 +3,12 @@ import { User, Product, Order, OrderItem, OrderWithItems } from '../types';
 import { memoryStore } from './memory-store';
 
 const supabaseUrl = process.env.SUPABASE_URL!;
-const supabaseKey = process.env.SUPABASE_ANON_KEY!;
+const supabaseKey = process.env.SUPABASE_SERVICE_KEY!;
 
 export const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Use memory store for development when Supabase RLS is problematic
-const USE_MEMORY_STORE = true;
+const USE_MEMORY_STORE = false;
 
 export class DatabaseService {
   // User operations
