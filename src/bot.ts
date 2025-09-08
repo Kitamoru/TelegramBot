@@ -418,12 +418,14 @@ bot.hears('📋 Мои заказы', async (ctx) => {
   }
   
   if (otherOrders.length > 0) {
-    let text = '📋 История заказов:\n\n';
-    for (const order of otherOrders.slice(0, 10)) {
-      text += `Заказ #${order.id} - ${getStatusText(order.status)} - ${formatPrice(order.total_amount)}\n`;
-      text += `${new Date(order.created_at).toLocaleDateString('ru')}\n\n`;
+    await ctx.reply('📋 История заказов:');
+    
+    for (const order of otherOrders.slice(0, 10)) { // Show last 10 orders
+      const orderWithItems = await db.getOrderWithItems(order.id);
+      if (orderWithItems) {
+        await ctx.reply(formatOrder(orderWithItems));
+      }
     }
-    await ctx.reply(text);
   }
 });
 
