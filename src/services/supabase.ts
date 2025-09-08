@@ -1,14 +1,22 @@
 import { createClient } from '@supabase/supabase-js';
 import { User, Product, Order, OrderItem, OrderWithItems } from '../types';
+import { memoryStore } from './memory-store';
 
 const supabaseUrl = process.env.SUPABASE_URL!;
 const supabaseKey = process.env.SUPABASE_ANON_KEY!;
 
 export const supabase = createClient(supabaseUrl, supabaseKey);
 
+// Use memory store for development when Supabase RLS is problematic
+const USE_MEMORY_STORE = true;
+
 export class DatabaseService {
   // User operations
   async createOrUpdateUser(userData: Partial<User>): Promise<User | null> {
+    if (USE_MEMORY_STORE) {
+      return memoryStore.createOrUpdateUser(userData);
+    }
+    
     try {
       // First try to insert
       const { data: insertData, error: insertError } = await supabase
@@ -44,6 +52,10 @@ export class DatabaseService {
   }
 
   async getUserByTelegramId(telegramId: number): Promise<User | null> {
+    if (USE_MEMORY_STORE) {
+      return memoryStore.getUserByTelegramId(telegramId);
+    }
+    
     try {
       const { data, error } = await supabase
         .from('profiles')
@@ -65,6 +77,10 @@ export class DatabaseService {
 
   // Product operations
   async getAvailableProducts(): Promise<Product[]> {
+    if (USE_MEMORY_STORE) {
+      return memoryStore.getAvailableProducts();
+    }
+    
     try {
       const { data, error } = await supabase
         .from('products')
@@ -85,6 +101,10 @@ export class DatabaseService {
   }
 
   async getProductsByCategory(category: string): Promise<Product[]> {
+    if (USE_MEMORY_STORE) {
+      return memoryStore.getProductsByCategory(category);
+    }
+    
     try {
       const { data, error } = await supabase
         .from('products')
@@ -107,6 +127,10 @@ export class DatabaseService {
 
   // Order operations
   async getOrCreateCartOrder(customerId: number): Promise<Order | null> {
+    if (USE_MEMORY_STORE) {
+      return memoryStore.getOrCreateCartOrder(customerId);
+    }
+    
     try {
       // First try to get existing cart
       const { data: existingCart, error: getError } = await supabase
@@ -149,6 +173,10 @@ export class DatabaseService {
   }
 
   async addItemToOrder(orderId: number, productId: number, quantity: number, price: number): Promise<boolean> {
+    if (USE_MEMORY_STORE) {
+      return memoryStore.addItemToOrder(orderId, productId, quantity, price);
+    }
+    
     try {
       // Check if item already exists
       const { data: existingItem } = await supabase
@@ -216,6 +244,10 @@ export class DatabaseService {
   }
 
   async getOrderWithItems(orderId: number): Promise<OrderWithItems | null> {
+    if (USE_MEMORY_STORE) {
+      return memoryStore.getOrderWithItems(orderId);
+    }
+    
     try {
       const { data, error } = await supabase
         .from('orders')
@@ -242,6 +274,10 @@ export class DatabaseService {
   }
 
   async updateOrderStatus(orderId: number, status: Order['status'], pickupLocation?: string): Promise<boolean> {
+    if (USE_MEMORY_STORE) {
+      return memoryStore.updateOrderStatus(orderId, status, pickupLocation);
+    }
+    
     try {
       const updateData: any = { status };
       if (pickupLocation) {
@@ -346,6 +382,10 @@ export class DatabaseService {
 
   // Atomic order status update with race condition protection
   async atomicStatusUpdate(orderId: number, expectedStatus: string, newStatus: string): Promise<boolean> {
+    if (USE_MEMORY_STORE) {
+      return memoryStore.atomicStatusUpdate(orderId, expectedStatus, newStatus);
+    }
+    
     try {
       const { data, error } = await supabase.rpc('atomic_status_update', {
         order_id: orderId,
