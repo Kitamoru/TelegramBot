@@ -404,4 +404,31 @@ export class DatabaseService {
       return false;
     }
   }
+
+  async cancelOrder(orderId: number): Promise<boolean> {
+    if (USE_MEMORY_STORE) {
+      return memoryStore.updateOrderStatus(orderId, 'cancelled');
+    }
+    
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .update({ 
+          status: 'cancelled',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', orderId)
+        .in('status', ['pending', 'preparing']); // Only allow cancelling pending or preparing orders
+
+      if (error) {
+        console.error('Error cancelling order:', error);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Exception in cancelOrder:', error);
+      return false;
+    }
+  }
 }
