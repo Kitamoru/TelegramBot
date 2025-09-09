@@ -387,18 +387,24 @@ export class DatabaseService {
     }
     
     try {
-      const { data, error } = await supabase.rpc('atomic_status_update', {
-        order_id: orderId,
-        expected_status: expectedStatus,
-        new_status: newStatus
-      });
+      // Use direct SQL update instead of stored procedure for now
+      const { data, error } = await supabase
+        .from('orders')
+        .update({ 
+          status: newStatus,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', orderId)
+        .eq('status', expectedStatus) // Only update if current status matches expected
+        .select();
 
       if (error) {
         console.error('Error in atomic status update:', error);
         return false;
       }
 
-      return data;
+      // Return true if exactly one row was updated
+      return data && data.length === 1;
     } catch (error) {
       console.error('Exception in atomicStatusUpdate:', error);
       return false;
