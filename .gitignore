@@ -9,5 +9,15 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# TypeScript compiled files
+*.js
+*.d.ts
+*.js.map
+*.d.ts.map
+!vercel.json
+
 # Vercel
 .vercel
+
+# Temporary files
+attached_assets/
