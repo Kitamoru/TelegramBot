@@ -1,10 +1,5 @@
 {
   "version": 2,
-  "functions": {
-    "api/bot.ts": {
-      "runtime": "@vercel/node"
-    }
-  },
   "builds": [
     {
       "src": "api/bot.ts",
@@ -13,8 +8,9 @@
   ],
   "routes": [
     {
-      "src": "/api/bot",
-      "dest": "/api/bot.ts"
+      "src": "/(.*)",
+      "dest": "/api/bot.ts",
+      "methods": ["POST", "GET"]
     }
   ]
 }
