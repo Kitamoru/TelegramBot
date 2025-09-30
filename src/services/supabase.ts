@@ -387,16 +387,6 @@ export class DatabaseService {
     }
     
     try {
-      // First, check current order status for debugging
-      const { data: currentOrder } = await supabase
-        .from('orders')
-        .select('id, status, pickup_location')
-        .eq('id', orderId)
-        .single();
-      
-      console.log(`[atomicStatusUpdate] Order #${orderId}: current status="${currentOrder?.status}", expected="${expectedStatus}", new="${newStatus}"`);
-      
-      // Use direct SQL update instead of stored procedure for now
       const { data, error } = await supabase
         .from('orders')
         .update({ 
@@ -412,11 +402,8 @@ export class DatabaseService {
         return false;
       }
 
-      const success = data && data.length === 1;
-      console.log(`[atomicStatusUpdate] Order #${orderId}: update result=${success}, rows updated=${data?.length || 0}`);
-      
       // Return true if exactly one row was updated
-      return success;
+      return data && data.length === 1;
     } catch (error) {
       console.error('Exception in atomicStatusUpdate:', error);
       return false;
