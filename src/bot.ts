@@ -282,16 +282,9 @@ bot.hears(/🛒 Корзина/, async (ctx) => {
 });
 
 bot.action('show_cart', async (ctx) => {
-  console.log('[show_cart] Action triggered');
-  try {
-    await ctx.answerCbQuery();
-    await ctx.deleteMessage().catch((e) => {
-      console.log('[show_cart] Delete message failed:', e.message);
-    });
-    await showCart(ctx);
-  } catch (error) {
-    console.error('[show_cart] Error:', error);
-  }
+  await ctx.answerCbQuery();
+  await ctx.deleteMessage().catch(() => {});
+  await showCart(ctx);
 });
 
 bot.action('continue_shopping', async (ctx) => {
@@ -300,12 +293,8 @@ bot.action('continue_shopping', async (ctx) => {
 });
 
 async function showCart(ctx: Context) {
-  console.log('[showCart] Function called');
   const user = ctx.state.user as User;
-  console.log('[showCart] User ID:', user.user_id);
-  
   const cartOrder = await db.getOrCreateCartOrder(user.user_id);
-  console.log('[showCart] Cart order:', cartOrder ? `ID ${cartOrder.id}` : 'null');
   
   if (!cartOrder) {
     await ctx.reply('Ошибка получения корзины');
@@ -313,7 +302,6 @@ async function showCart(ctx: Context) {
   }
   
   const orderWithItems = await db.getOrderWithItems(cartOrder.id);
-  console.log('[showCart] Order with items:', orderWithItems ? `${orderWithItems.order_items.length} items` : 'null');
   
   if (!orderWithItems || orderWithItems.order_items.length === 0) {
     await ctx.reply('Ваша корзина пуста. Добавьте товары для оформления заказа.');
@@ -326,8 +314,6 @@ async function showCart(ctx: Context) {
   }
   text += `\n💰 Итого: ${formatPrice(orderWithItems.total_amount)}`;
   
-  console.log('[showCart] Sending cart message');
-  
   const keyboard = Markup.inlineKeyboard([
     [Markup.button.callback('📝 Оформить заказ', 'checkout_order')],
     [Markup.button.callback('🗑 Очистить корзину', 'clear_cart')],
@@ -335,7 +321,6 @@ async function showCart(ctx: Context) {
   ]);
   
   await ctx.reply(text, keyboard);
-  console.log('[showCart] Cart message sent');
 }
 
 // Checkout process
