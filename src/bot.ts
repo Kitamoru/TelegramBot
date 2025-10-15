@@ -8,24 +8,12 @@ const db = new DatabaseService();
 
 // Session storage (in production, use Redis or similar)
 const sessions = new Map<number, any>();
-const deliverySessions = new Map<number, DeliverySession>();
 
 function getSession(userId: number) {
   if (!sessions.has(userId)) {
     sessions.set(userId, {});
   }
   return sessions.get(userId);
-}
-
-function getDeliverySession(userId: number): DeliverySession {
-  if (!deliverySessions.has(userId)) {
-    deliverySessions.set(userId, { step: 'side' });
-  }
-  return deliverySessions.get(userId)!;
-}
-
-function clearDeliverySession(userId: number): void {
-  deliverySessions.delete(userId);
 }
 
 // Utility functions
@@ -40,7 +28,7 @@ function formatOrder(order: OrderWithItems): string {
   if (order.pickup_location === 'delivery') {
     text += `📍 Доставка до места\n`;
     if (order.delivery_side && order.sector && order.seat_row && order.seat_number) {
-      text += `🏟️ Место: ${order.delivery_side === 'left' ? 'Левая' : 'Правая'} сторона, Сектор ${order.sector}, Ряд ${order.seat_row}, Место ${order.seat_number}\n`;
+      text += `📍 Место: ${order.delivery_side === 'left' ? 'Левая' : 'Правая'} сторона, Сектор ${order.sector}, Ряд ${order.seat_row}, Место ${order.seat_number}\n`;
     }
   } else {
     text += `📍 ${order.pickup_location === 'left_buffer' ? 'Левый буфет' : 'Правый буфет'}\n`;
@@ -97,28 +85,30 @@ async function notifySellers(order: OrderWithItems): Promise<void> {
   try {
     if (!order.pickup_location) return;
 
-    if (order.pickup_location === 'delivery') {
-      // Notify delivery personnel
-      console.log(`Notification for delivery: New order #${order.id}`);
-      // Here you would send the notification to delivery personnel
+    let sellerRole: string;
+    if (order.pickup_location === 'left_buffer') {
+      sellerRole = 'seller_left';
+    } else if (order.pickup_location === 'right_buffer') {
+      sellerRole = 'seller_right';
     } else {
-      const sellerRole = order.pickup_location === 'left_buffer' ? 'seller_left' : 'seller_right';
-      console.log(`Notification for ${sellerRole}: New order #${order.id}`);
+      sellerRole = 'delivery';
     }
     
-    // In a real application, you would maintain lists of chat IDs for each role
-    // and send appropriate notifications
+    // In a real application, you would maintain a list of seller chat IDs
+    // For now, we'll log the notification
+    console.log(`Notification for ${sellerRole}: New order #${order.id}`);
+    
+    // Here you would send the notification to sellers
+    // const sellerChatIds = await getSellersForLocation(order.pickup_location);
+    // for (const chatId of sellerChatIds) {
+    //   await bot.telegram.sendMessage(chatId, formatOrder(order), {
+    //     reply_markup: Markup.inlineKeyboard([
+    //       Markup.button.callback('👨‍🍳 Взять в работу', `take_order_${order.id}`)
+    //     ]).reply_markup
+    //   });
+    // }
   } catch (error) {
     console.error('Error notifying sellers:', error);
-  }
-}
-
-async function notifyDeliveryPersonnel(order: OrderWithItems): Promise<void> {
-  try {
-    console.log(`Notification for delivery personnel: New delivery order #${order.id}`);
-    // Implementation for notifying delivery personnel would go here
-  } catch (error) {
-    console.error('Error notifying delivery personnel:', error);
   }
 }
 
@@ -161,8 +151,6 @@ bot.command('start', async (ctx) => {
   
   if (user.role === 'customer') {
     await showCustomerMainMenu(ctx);
-  } else if (user.role === 'delivery') {
-    await showDeliveryMainMenu(ctx);
   } else {
     await showSellerMainMenu(ctx);
   }
@@ -360,7 +348,7 @@ bot.action('checkout_order', async (ctx) => {
   ]);
   
   await ctx.editMessageText(
-    'Выберите способ получения заказа:',
+    'Выберите место получения заказа:',
     keyboard
   );
 });
@@ -374,27 +362,18 @@ bot.action('pickup_right_buffer', async (ctx) => {
 });
 
 bot.action('pickup_delivery', async (ctx) => {
-  await startDeliveryProcess(ctx);
+  await startDeliverySelection(ctx);
 });
 
-async function startDeliveryProcess(ctx: Context) {
-  const user = ctx.state.user as User;
-  const cartOrder = await db.getOrCreateCartOrder(user.user_id);
-  
-  if (!cartOrder) {
-    await ctx.answerCbQuery('Ошибка получения корзины');
-    return;
-  }
-  
-  // Initialize delivery session
-  const deliverySession = getDeliverySession(user.user_id);
-  deliverySession.orderId = cartOrder.id;
-  deliverySession.step = 'side';
+// Delivery selection flow
+async function startDeliverySelection(ctx: Context) {
+  const session = getSession(ctx.from!.id);
+  session.delivery = { step: 'side' } as DeliverySession;
   
   const keyboard = Markup.inlineKeyboard([
     [Markup.button.callback('👈 Левая сторона', 'delivery_side_left')],
     [Markup.button.callback('👉 Правая сторона', 'delivery_side_right')],
-    [Markup.button.callback('⬅️ Назад', 'show_cart')]
+    [Markup.button.callback('⬅️ Назад', 'checkout_order')]
   ]);
   
   await ctx.editMessageText(
@@ -404,18 +383,19 @@ async function startDeliveryProcess(ctx: Context) {
 }
 
 bot.action('delivery_side_left', async (ctx) => {
-  await handleDeliverySide(ctx, 'left');
+  await handleDeliverySideSelection(ctx, 'left');
 });
 
 bot.action('delivery_side_right', async (ctx) => {
-  await handleDeliverySide(ctx, 'right');
+  await handleDeliverySideSelection(ctx, 'right');
 });
 
-async function handleDeliverySide(ctx: Context, side: 'left' | 'right') {
-  const user = ctx.state.user as User;
-  const deliverySession = getDeliverySession(user.user_id);
-  deliverySession.side = side;
-  deliverySession.step = 'sector';
+async function handleDeliverySideSelection(ctx: Context, side: 'left' | 'right') {
+  const session = getSession(ctx.from!.id);
+  if (!session.delivery) return;
+  
+  session.delivery.side = side;
+  session.delivery.step = 'sector';
   
   const keyboard = Markup.inlineKeyboard([
     [Markup.button.callback('1', 'delivery_sector_1')],
@@ -426,103 +406,115 @@ async function handleDeliverySide(ctx: Context, side: 'left' | 'right') {
   ]);
   
   await ctx.editMessageText(
-    `Выбрана ${side === 'left' ? 'левая' : 'правая'} сторона.\n\nТеперь выберите сектор:`,
+    'Выберите сектор:',
     keyboard
   );
 }
 
-bot.action(/delivery_sector_(\d)/, async (ctx) => {
+bot.action(/delivery_sector_(\d+)/, async (ctx) => {
   const sector = parseInt(ctx.match[1]);
-  await handleDeliverySector(ctx, sector);
+  await handleDeliverySectorSelection(ctx, sector);
 });
 
-async function handleDeliverySector(ctx: Context, sector: number) {
-  const user = ctx.state.user as User;
-  const deliverySession = getDeliverySession(user.user_id);
-  deliverySession.sector = sector;
-  deliverySession.step = 'row';
+async function handleDeliverySectorSelection(ctx: Context, sector: number) {
+  const session = getSession(ctx.from!.id);
+  if (!session.delivery) return;
+  
+  session.delivery.sector = sector;
+  session.delivery.step = 'row';
   
   await ctx.editMessageText(
-    `Выбран сектор ${sector}.\n\nТеперь введите номер ряда (например: 5):`
+    'Введите номер ряда (например: 5):\n\nИспользуйте текстовое сообщение для ввода.',
+    Markup.inlineKeyboard([
+      [Markup.button.callback('⬅️ Назад', `delivery_side_${session.delivery.side}`)]
+    ])
   );
 }
 
-// Handle text input for row and seat
+// Handle text input for row
 bot.on('text', async (ctx) => {
-  const user = ctx.state.user as User;
-  const deliverySession = getDeliverySession(user.user_id);
+  const session = getSession(ctx.from!.id);
+  if (!session.delivery) return;
+  
   const text = ctx.message.text;
   
-  if (deliverySession.step === 'row') {
-    deliverySession.row = text;
-    deliverySession.step = 'seat';
+  if (session.delivery.step === 'row') {
+    session.delivery.row = text.trim();
+    session.delivery.step = 'seat';
     
     await ctx.reply(
-      `Введен ряд: ${text}\n\nТеперь введите номер места (например: 12):`
+      'Введите номер места (например: 12):',
+      Markup.inlineKeyboard([
+        [Markup.button.callback('⬅️ Назад', `delivery_sector_${session.delivery.sector}`)]
+      ])
     );
-  } else if (deliverySession.step === 'seat') {
-    deliverySession.seat = text;
-    deliverySession.step = 'completed';
+    return;
+  }
+  
+  if (session.delivery.step === 'seat') {
+    session.delivery.seat = text.trim();
     
-    await completeDeliveryProcess(ctx);
-  } else {
-    // Handle other text messages normally
+    // Complete delivery selection
+    await completeDeliverySelection(ctx);
     return;
   }
 });
 
-async function completeDeliveryProcess(ctx: Context) {
+async function completeDeliverySelection(ctx: Context) {
   const user = ctx.state.user as User;
-  const deliverySession = getDeliverySession(user.user_id);
+  const session = getSession(ctx.from!.id);
   
-  if (!deliverySession.orderId || !deliverySession.side || !deliverySession.sector || !deliverySession.row || !deliverySession.seat) {
-    await ctx.reply('Ошибка обработки заказа. Попробуйте еще раз.');
-    clearDeliverySession(user.user_id);
+  if (!session.delivery || !session.delivery.side || !session.delivery.sector || !session.delivery.row || !session.delivery.seat) {
+    await ctx.reply('Ошибка в данных доставки. Попробуйте снова.');
     return;
   }
   
   try {
-    // Update order with delivery details
-    const success = await db.updateOrderDeliveryDetails(
-      deliverySession.orderId,
-      deliverySession.side,
-      deliverySession.sector,
-      deliverySession.row,
-      deliverySession.seat
-    );
-    
-    if (!success) {
-      await ctx.reply('Ошибка обновления данных доставки.');
-      clearDeliverySession(user.user_id);
+    const cartOrder = await db.getOrCreateCartOrder(user.user_id);
+    if (!cartOrder) {
+      await ctx.reply('Ошибка получения корзины');
       return;
     }
     
-    // Update order status to pending with delivery location
-    const orderSuccess = await db.updateOrderStatus(deliverySession.orderId, 'pending', 'delivery');
+    const orderWithItems = await db.getOrderWithItems(cartOrder.id);
+    if (!orderWithItems || orderWithItems.order_items.length === 0) {
+      await ctx.reply('Корзина пуста');
+      return;
+    }
     
-    if (orderSuccess) {
-      const updatedOrder = await db.getOrderWithItems(deliverySession.orderId);
+    // Update order with delivery info
+    const success = await db.updateOrderStatus(cartOrder.id, 'pending', 'delivery');
+    await db.updateOrderDeliveryInfo(cartOrder.id, {
+      delivery_side: session.delivery.side,
+      sector: session.delivery.sector,
+      seat_row: session.delivery.row,
+      seat_number: session.delivery.seat
+    });
+    
+    if (success) {
+      const updatedOrder = await db.getOrderWithItems(cartOrder.id);
       if (updatedOrder) {
-        await notifyDeliveryPersonnel(updatedOrder);
+        await notifySellers(updatedOrder);
       }
       
       await ctx.reply(
-        `✅ Заказ #${deliverySession.orderId} успешно оформлен с доставкой!\n\n` +
-        `🏟️ Место доставки: ${deliverySession.side === 'left' ? 'Левая' : 'Правая'} сторона, Сектор ${deliverySession.sector}, Ряд ${deliverySession.row}, Место ${deliverySession.seat}\n` +
-        `💰 Сумма: ${formatPrice(updatedOrder?.total_amount || 0)}\n\n` +
-        `Ожидайте доставки заказа на ваше место.`
+        `✅ Заказ #${cartOrder.id} успешно оформлен!\n\n` +
+        `🚚 Доставка до места\n` +
+        `📍 ${session.delivery.side === 'left' ? 'Левая' : 'Правая'} сторона, Сектор ${session.delivery.sector}, Ряд ${session.delivery.row}, Место ${session.delivery.seat}\n` +
+        `💰 Сумма: ${formatPrice(orderWithItems.total_amount)}\n\n` +
+        `Ожидайте уведомления о готовности заказа.`
       );
       
-      clearDeliverySession(user.user_id);
+      // Clear delivery session
+      delete session.delivery;
+      
       await showCustomerMainMenu(ctx);
     } else {
-      await ctx.reply('Ошибка оформления заказа.');
-      clearDeliverySession(user.user_id);
+      await ctx.reply('Ошибка оформления заказа');
     }
   } catch (error) {
-    console.error('Error completing delivery process:', error);
-    await ctx.reply('Произошла ошибка при оформлении заказа.');
-    clearDeliverySession(user.user_id);
+    console.error('Error processing delivery checkout:', error);
+    await ctx.reply('Произошла ошибка при оформлении заказа');
   }
 }
 
@@ -672,8 +664,8 @@ bot.action(/confirm_cancel_(\d+)/, async (ctx) => {
       if (order && user.role === 'customer') {
         console.log(`Customer cancelled order #${orderId}`);
       } else if (order && ['seller_left', 'seller_right', 'delivery'].includes(user.role)) {
-        console.log(`User ${user.role} cancelled order #${orderId}`);
-        // TODO: Notify customer about cancellation
+        console.log(`Seller ${user.role} cancelled order #${orderId}`);
+        // TODO: Notify customer about seller cancellation
       }
       
     } else {
@@ -692,118 +684,24 @@ bot.action('cancel_cancellation', async (ctx) => {
 
 // Seller functions
 async function showSellerMainMenu(ctx: Context) {
-  const keyboard = Markup.keyboard([
-    ['📥 Новые заказы', '👨‍🍳 В работе'],
-    ['✅ Готовые заказы']
-  ]).resize();
+  const user = ctx.state.user as User;
+  let keyboard;
+  
+  if (user.role === 'delivery') {
+    keyboard = Markup.keyboard([
+      ['📥 Новые заказы', '👨‍🍳 В работе'],
+      ['✅ Готовые заказы']
+    ]).resize();
+  } else {
+    keyboard = Markup.keyboard([
+      ['📥 Новые заказы', '👨‍🍳 В работе'],
+      ['✅ Готовые заказы']
+    ]).resize();
+  }
   
   await ctx.reply('Панель продавца:', keyboard);
 }
 
-// Delivery functions
-async function showDeliveryMainMenu(ctx: Context) {
-  const keyboard = Markup.keyboard([
-    ['📦 Новые заказы', '🚚 В доставке'],
-    ['✅ Доставленные заказы']
-  ]).resize();
-  
-  await ctx.reply('Панель доставки:', keyboard);
-}
-
-bot.hears('📦 Новые заказы', async (ctx) => {
-  const user = ctx.state.user as User;
-  if (user.role !== 'delivery') return;
-  
-  const orders = await db.getPendingDeliveryOrders();
-  
-  if (orders.length === 0) {
-    await ctx.reply('Нет новых заказов на доставку.');
-    return;
-  }
-  
-  for (const order of orders) {
-    const keyboard = Markup.inlineKeyboard([
-      [Markup.button.callback('🚚 Взять в доставку', `take_delivery_${order.id}`)],
-      [Markup.button.callback('❌ Отменить заказ', `cancel_order_${order.id}`)]
-    ]);
-    
-    await ctx.reply(formatOrder(order), keyboard);
-  }
-});
-
-bot.hears('🚚 В доставке', async (ctx) => {
-  const user = ctx.state.user as User;
-  if (user.role !== 'delivery') return;
-  
-  const orders = await db.getActiveDeliveryOrders();
-  const preparingOrders = orders.filter(o => o.status === 'preparing');
-  
-  if (preparingOrders.length === 0) {
-    await ctx.reply('Нет заказов в доставке.');
-    return;
-  }
-  
-  for (const order of preparingOrders) {
-    const keyboard = Markup.inlineKeyboard([
-      [Markup.button.callback('✅ Доставлено', `complete_delivery_${order.id}`)],
-      [Markup.button.callback('❌ Отменить заказ', `cancel_order_${order.id}`)]
-    ]);
-    
-    await ctx.reply(formatOrder(order), keyboard);
-  }
-});
-
-// Delivery actions
-bot.action(/take_delivery_(\d+)/, async (ctx) => {
-  const orderId = parseInt(ctx.match[1]);
-  
-  try {
-    const success = await db.atomicStatusUpdate(orderId, 'pending', 'preparing');
-    
-    if (success) {
-      await ctx.answerCbQuery('✅ Заказ взят в доставку');
-      await ctx.editMessageReplyMarkup({ inline_keyboard: [] });
-    } else {
-      await ctx.answerCbQuery('❌ Заказ уже взят другим курьером');
-    }
-  } catch (error) {
-    console.error('Error taking delivery order:', error);
-    await ctx.answerCbQuery('Произошла ошибка');
-  }
-});
-
-bot.action(/complete_delivery_(\d+)/, async (ctx) => {
-  const orderId = parseInt(ctx.match[1]);
-  
-  try {
-    const success = await db.updateOrderStatus(orderId, 'completed');
-    
-    if (success) {
-      await ctx.answerCbQuery('✅ Заказ доставлен');
-      await ctx.editMessageReplyMarkup({ inline_keyboard: [] });
-      
-      // Notify customer
-      const order = await db.getOrderWithItems(orderId);
-      if (order) {
-        try {
-          await bot.telegram.sendMessage(
-            order.customer_id,
-            `🔔 Ваш заказ был доставлен! Спасибо за заказ!\n\n${formatOrder(order)}`
-          );
-        } catch (error) {
-          console.log('Could not notify customer:', error);
-        }
-      }
-    } else {
-      await ctx.answerCbQuery('Ошибка обновления статуса');
-    }
-  } catch (error) {
-    console.error('Error completing delivery:', error);
-    await ctx.answerCbQuery('Произошла ошибка');
-  }
-});
-
-// Seller handlers (existing)
 bot.hears('📥 Новые заказы', async (ctx) => {
   const user = ctx.state.user as User;
   if (user.role === 'customer') return;
@@ -868,7 +766,7 @@ bot.hears('✅ Готовые заказы', async (ctx) => {
   }
 });
 
-// Seller actions (existing)
+// Seller actions
 bot.action(/take_order_(\d+)/, async (ctx) => {
   const orderId = parseInt(ctx.match[1]);
   
@@ -947,8 +845,6 @@ bot.hears('⬅️ Назад', async (ctx) => {
   const user = ctx.state.user as User;
   if (user.role === 'customer') {
     await showCustomerMainMenu(ctx);
-  } else if (user.role === 'delivery') {
-    await showDeliveryMainMenu(ctx);
   } else {
     await showSellerMainMenu(ctx);
   }
