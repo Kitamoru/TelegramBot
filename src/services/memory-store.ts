@@ -149,6 +149,26 @@ class MemoryStore {
     return true;
   }
 
+  updateOrderDeliveryDetails(
+    orderId: number, 
+    deliverySide: 'left' | 'right', 
+    sector: number, 
+    seatRow: string, 
+    seatNumber: string
+  ): boolean {
+    const order = this.orders.get(orderId);
+    if (!order) return false;
+
+    order.delivery_side = deliverySide;
+    order.sector = sector;
+    order.seat_row = seatRow;
+    order.seat_number = seatNumber;
+    order.updated_at = new Date().toISOString();
+
+    this.orders.set(orderId, order);
+    return true;
+  }
+
   getOrdersByCustomer(customerId: number): Order[] {
     return Array.from(this.orders.values())
       .filter(order => order.customer_id === customerId && order.status !== 'cart')
@@ -171,6 +191,25 @@ class MemoryStore {
     return Array.from(this.orders.values())
       .filter(order => 
         order.pickup_location === location && 
+        ['preparing', 'ready_for_pickup'].includes(order.status)
+      )
+      .map(order => this.getOrderWithItems(order.id)!)
+      .filter(order => order !== null)
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  }
+
+  getPendingDeliveryOrders(): OrderWithItems[] {
+    return Array.from(this.orders.values())
+      .filter(order => order.pickup_location === 'delivery' && order.status === 'pending')
+      .map(order => this.getOrderWithItems(order.id)!)
+      .filter(order => order !== null)
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  }
+
+  getActiveDeliveryOrders(): OrderWithItems[] {
+    return Array.from(this.orders.values())
+      .filter(order => 
+        order.pickup_location === 'delivery' && 
         ['preparing', 'ready_for_pickup'].includes(order.status)
       )
       .map(order => this.getOrderWithItems(order.id)!)
