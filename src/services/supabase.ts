@@ -301,36 +301,33 @@ export class DatabaseService {
     }
   }
 
-  async updateOrderDeliveryDetails(
+  async updateOrderDeliveryInfo(
     orderId: number, 
-    deliverySide: 'left' | 'right', 
-    sector: number, 
-    seatRow: string, 
-    seatNumber: string
+    deliveryData: {
+      delivery_side?: 'left' | 'right';
+      sector?: number;
+      seat_row?: string;
+      seat_number?: string;
+    }
   ): Promise<boolean> {
     if (USE_MEMORY_STORE) {
-      return memoryStore.updateOrderDeliveryDetails(orderId, deliverySide, sector, seatRow, seatNumber);
+      return memoryStore.updateOrderDeliveryInfo(orderId, deliveryData);
     }
     
     try {
       const { error } = await supabase
         .from('orders')
-        .update({
-          delivery_side: deliverySide,
-          sector: sector,
-          seat_row: seatRow,
-          seat_number: seatNumber
-        })
+        .update(deliveryData)
         .eq('id', orderId);
 
       if (error) {
-        console.error('Error updating delivery details:', error);
+        console.error('Error updating delivery info:', error);
         return false;
       }
 
       return true;
     } catch (error) {
-      console.error('Exception in updateOrderDeliveryDetails:', error);
+      console.error('Exception in updateOrderDeliveryInfo:', error);
       return false;
     }
   }
@@ -356,9 +353,17 @@ export class DatabaseService {
     }
   }
 
-  async getPendingOrdersForSeller(sellerRole: 'seller_left' | 'seller_right'): Promise<OrderWithItems[]> {
+  async getPendingOrdersForSeller(sellerRole: 'seller_left' | 'seller_right' | 'delivery'): Promise<OrderWithItems[]> {
     try {
-      const location = sellerRole === 'seller_left' ? 'left_buffer' : 'right_buffer';
+      let location: string;
+      
+      if (sellerRole === 'seller_left') {
+        location = 'left_buffer';
+      } else if (sellerRole === 'seller_right') {
+        location = 'right_buffer';
+      } else {
+        location = 'delivery';
+      }
       
       const { data, error } = await supabase
         .from('orders')
@@ -385,9 +390,17 @@ export class DatabaseService {
     }
   }
 
-  async getActiveOrdersForSeller(sellerRole: 'seller_left' | 'seller_right'): Promise<OrderWithItems[]> {
+  async getActiveOrdersForSeller(sellerRole: 'seller_left' | 'seller_right' | 'delivery'): Promise<OrderWithItems[]> {
     try {
-      const location = sellerRole === 'seller_left' ? 'left_buffer' : 'right_buffer';
+      let location: string;
+      
+      if (sellerRole === 'seller_left') {
+        location = 'left_buffer';
+      } else if (sellerRole === 'seller_right') {
+        location = 'right_buffer';
+      } else {
+        location = 'delivery';
+      }
       
       const { data, error } = await supabase
         .from('orders')
@@ -410,60 +423,6 @@ export class DatabaseService {
       return data || [];
     } catch (error) {
       console.error('Exception in getActiveOrdersForSeller:', error);
-      return [];
-    }
-  }
-
-  async getPendingDeliveryOrders(): Promise<OrderWithItems[]> {
-    try {
-      const { data, error } = await supabase
-        .from('orders')
-        .select(`
-          *,
-          order_items (
-            *,
-            product:products (*)
-          )
-        `)
-        .eq('pickup_location', 'delivery')
-        .eq('status', 'pending')
-        .order('created_at');
-
-      if (error) {
-        console.error('Error getting pending delivery orders:', error);
-        return [];
-      }
-
-      return data || [];
-    } catch (error) {
-      console.error('Exception in getPendingDeliveryOrders:', error);
-      return [];
-    }
-  }
-
-  async getActiveDeliveryOrders(): Promise<OrderWithItems[]> {
-    try {
-      const { data, error } = await supabase
-        .from('orders')
-        .select(`
-          *,
-          order_items (
-            *,
-            product:products (*)
-          )
-        `)
-        .eq('pickup_location', 'delivery')
-        .in('status', ['preparing', 'ready_for_pickup'])
-        .order('created_at');
-
-      if (error) {
-        console.error('Error getting active delivery orders:', error);
-        return [];
-      }
-
-      return data || [];
-    } catch (error) {
-      console.error('Exception in getActiveDeliveryOrders:', error);
       return [];
     }
   }
