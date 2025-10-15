@@ -149,22 +149,20 @@ class MemoryStore {
     return true;
   }
 
-  updateOrderDeliveryDetails(
+  updateOrderDeliveryInfo(
     orderId: number, 
-    deliverySide: 'left' | 'right', 
-    sector: number, 
-    seatRow: string, 
-    seatNumber: string
+    deliveryData: {
+      delivery_side?: 'left' | 'right';
+      sector?: number;
+      seat_row?: string;
+      seat_number?: string;
+    }
   ): boolean {
     const order = this.orders.get(orderId);
     if (!order) return false;
 
-    order.delivery_side = deliverySide;
-    order.sector = sector;
-    order.seat_row = seatRow;
-    order.seat_number = seatNumber;
+    Object.assign(order, deliveryData);
     order.updated_at = new Date().toISOString();
-
     this.orders.set(orderId, order);
     return true;
   }
@@ -175,8 +173,16 @@ class MemoryStore {
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }
 
-  getPendingOrdersForSeller(sellerRole: 'seller_left' | 'seller_right'): OrderWithItems[] {
-    const location = sellerRole === 'seller_left' ? 'left_buffer' : 'right_buffer';
+  getPendingOrdersForSeller(sellerRole: 'seller_left' | 'seller_right' | 'delivery'): OrderWithItems[] {
+    let location: string;
+    
+    if (sellerRole === 'seller_left') {
+      location = 'left_buffer';
+    } else if (sellerRole === 'seller_right') {
+      location = 'right_buffer';
+    } else {
+      location = 'delivery';
+    }
     
     return Array.from(this.orders.values())
       .filter(order => order.pickup_location === location && order.status === 'pending')
@@ -185,31 +191,20 @@ class MemoryStore {
       .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
   }
 
-  getActiveOrdersForSeller(sellerRole: 'seller_left' | 'seller_right'): OrderWithItems[] {
-    const location = sellerRole === 'seller_left' ? 'left_buffer' : 'right_buffer';
+  getActiveOrdersForSeller(sellerRole: 'seller_left' | 'seller_right' | 'delivery'): OrderWithItems[] {
+    let location: string;
+    
+    if (sellerRole === 'seller_left') {
+      location = 'left_buffer';
+    } else if (sellerRole === 'seller_right') {
+      location = 'right_buffer';
+    } else {
+      location = 'delivery';
+    }
     
     return Array.from(this.orders.values())
       .filter(order => 
         order.pickup_location === location && 
-        ['preparing', 'ready_for_pickup'].includes(order.status)
-      )
-      .map(order => this.getOrderWithItems(order.id)!)
-      .filter(order => order !== null)
-      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-  }
-
-  getPendingDeliveryOrders(): OrderWithItems[] {
-    return Array.from(this.orders.values())
-      .filter(order => order.pickup_location === 'delivery' && order.status === 'pending')
-      .map(order => this.getOrderWithItems(order.id)!)
-      .filter(order => order !== null)
-      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-  }
-
-  getActiveDeliveryOrders(): OrderWithItems[] {
-    return Array.from(this.orders.values())
-      .filter(order => 
-        order.pickup_location === 'delivery' && 
         ['preparing', 'ready_for_pickup'].includes(order.status)
       )
       .map(order => this.getOrderWithItems(order.id)!)
