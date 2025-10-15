@@ -19,11 +19,11 @@ export interface Order {
   customer_id: number;
   status: 'cart' | 'pending' | 'preparing' | 'ready_for_pickup' | 'completed' | 'cancelled';
   pickup_location?: 'left_buffer' | 'right_buffer' | 'delivery';
-  total_amount: number;
   delivery_side?: 'left' | 'right';
   sector?: number;
   seat_row?: string;
   seat_number?: string;
+  total_amount: number;
   created_at: string;
   updated_at: string;
 }
@@ -42,11 +42,11 @@ export interface OrderWithItems extends Order {
 
 export type BotContext = any;
 
+// Delivery session types
 export interface DeliverySession {
-  step: 'side' | 'sector' | 'row' | 'seat' | 'completed';
+  step: 'side' | 'sector' | 'row' | 'seat';
   side?: 'left' | 'right';
   sector?: number;
   row?: string;
   seat?: string;
-  orderId?: number;
 }
