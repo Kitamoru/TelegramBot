@@ -21,12 +21,21 @@ function formatPrice(price: number): string {
   return `${price.toFixed(0)} ₽`;
 }
 
+const deliveryCache = new Map<number, any>();
+
 function formatOrder(order: OrderWithItems): string {
   let text = `📋 Заказ #${order.id}\n`;
   text += `📅 ${new Date(order.created_at).toLocaleString('ru')}\n`;
   
+  // Use cached delivery details if DB fields are missing (schema cache issue)
+  const cachedDetails = deliveryCache.get(order.id);
+  const delivery_side = order.delivery_side || cachedDetails?.delivery_side;
+  const sector = order.sector || cachedDetails?.sector;
+  const seat_row = order.seat_row || cachedDetails?.seat_row;
+  const seat_number = order.seat_number || cachedDetails?.seat_number;
+
   if (order.pickup_location === 'delivery') {
-    text += `📍 Доставка: ${order.delivery_side === 'left' ? 'Левая' : 'Правая'} сторона, Сектор ${order.sector}, Ряд ${order.seat_row}, Место ${order.seat_number}\n`;
+    text += `📍 Доставка: ${delivery_side === 'left' ? 'Левая' : 'Правая'} сторона, Сектор ${sector}, Ряд ${seat_row}, Место ${seat_number}\n`;
   } else {
     text += `📍 ${order.pickup_location === 'left_buffer' ? 'Левый буфет' : 'Правый буфет'}\n`;
   }
@@ -433,6 +442,9 @@ async function processCheckout(ctx: Context, pickupLocation: 'left_buffer' | 'ri
     const success = await db.updateOrderStatus(cartOrder.id, 'pending', pickupLocation, deliveryDetails);
     
     if (success) {
+      if (pickupLocation === 'delivery') {
+        deliveryCache.set(cartOrder.id, deliveryDetails);
+      }
       const updatedOrder = await db.getOrderWithItems(cartOrder.id);
       if (updatedOrder) {
         await notifySellers(updatedOrder);
