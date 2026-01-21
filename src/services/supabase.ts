@@ -283,8 +283,29 @@ export class DatabaseService {
       if (pickupLocation) {
         updateData.pickup_location = pickupLocation;
       }
-      if (deliveryDetails) {
-        Object.assign(updateData, deliveryDetails);
+
+      // Try updating with all fields first
+      if (deliveryDetails && pickupLocation === 'delivery') {
+        const fullUpdateData = { ...updateData };
+        if (deliveryDetails.delivery_side) fullUpdateData.delivery_side = deliveryDetails.delivery_side;
+        if (deliveryDetails.sector) fullUpdateData.sector = deliveryDetails.sector;
+        if (deliveryDetails.seat_row) fullUpdateData.seat_row = deliveryDetails.seat_row;
+        if (deliveryDetails.seat_number) fullUpdateData.seat_number = deliveryDetails.seat_number;
+
+        const { error: fullError } = await supabase
+          .from('orders')
+          .update(fullUpdateData)
+          .eq('id', orderId);
+        
+        if (!fullError) return true;
+        
+        // If it failed due to missing columns, fall back to basic update
+        if (fullError.message?.includes('column') || fullError.code === 'PGRST204') {
+          console.warn('Falling back to basic update due to schema cache issue');
+        } else {
+          console.error('Error in full update:', fullError);
+          return false;
+        }
       }
 
       const { error } = await supabase
