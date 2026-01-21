@@ -275,7 +275,7 @@ export class DatabaseService {
 
   async updateOrderStatus(orderId: number, status: Order['status'], pickupLocation?: string, deliveryDetails?: Partial<Order>): Promise<boolean> {
     if (USE_MEMORY_STORE) {
-      return memoryStore.updateOrderStatus(orderId, status, pickupLocation);
+      return memoryStore.updateOrderStatus(orderId, status, pickupLocation, deliveryDetails);
     }
     
     try {
@@ -284,28 +284,12 @@ export class DatabaseService {
         updateData.pickup_location = pickupLocation;
       }
 
-      // Try updating with all fields first
+      // Try updating with all fields
       if (deliveryDetails && pickupLocation === 'delivery') {
-        const fullUpdateData = { ...updateData };
-        if (deliveryDetails.delivery_side) fullUpdateData.delivery_side = deliveryDetails.delivery_side;
-        if (deliveryDetails.sector) fullUpdateData.sector = deliveryDetails.sector;
-        if (deliveryDetails.seat_row) fullUpdateData.seat_row = deliveryDetails.seat_row;
-        if (deliveryDetails.seat_number) fullUpdateData.seat_number = deliveryDetails.seat_number;
-
-        const { error: fullError } = await supabase
-          .from('orders')
-          .update(fullUpdateData)
-          .eq('id', orderId);
-        
-        if (!fullError) return true;
-        
-        // If it failed due to missing columns, fall back to basic update
-        if (fullError.message?.includes('column') || fullError.code === 'PGRST204') {
-          console.warn('Falling back to basic update due to schema cache issue');
-        } else {
-          console.error('Error in full update:', fullError);
-          return false;
-        }
+        if (deliveryDetails.delivery_side) updateData.delivery_side = deliveryDetails.delivery_side;
+        if (deliveryDetails.sector) updateData.sector = deliveryDetails.sector;
+        if (deliveryDetails.seat_row) updateData.seat_row = deliveryDetails.seat_row;
+        if (deliveryDetails.seat_number) updateData.seat_number = deliveryDetails.seat_number;
       }
 
       const { error } = await supabase
@@ -315,6 +299,21 @@ export class DatabaseService {
 
       if (error) {
         console.error('Error updating order status:', error);
+        
+        // If it failed due to missing columns, fall back to basic update but LOG the data
+        if (error.message?.includes('column') || error.code === 'PGRST204') {
+          console.warn('FALLBACK: Schema cache issue. Delivery details lost to DB but logging here:', deliveryDetails);
+          
+          const basicUpdateData: any = { status };
+          if (pickupLocation) basicUpdateData.pickup_location = pickupLocation;
+          
+          const { error: basicError } = await supabase
+            .from('orders')
+            .update(basicUpdateData)
+            .eq('id', orderId);
+            
+          return !basicError;
+        }
         return false;
       }
 

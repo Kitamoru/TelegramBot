@@ -134,7 +134,7 @@ class MemoryStore {
     };
   }
 
-  updateOrderStatus(orderId: number, status: Order['status'], pickupLocation?: string): boolean {
+  updateOrderStatus(orderId: number, status: Order['status'], pickupLocation?: string, deliveryDetails?: Partial<Order>): boolean {
     const order = this.orders.get(orderId);
     if (!order) return false;
 
@@ -143,6 +143,13 @@ class MemoryStore {
     
     if (pickupLocation) {
       order.pickup_location = pickupLocation as any;
+    }
+
+    if (deliveryDetails && pickupLocation === 'delivery') {
+      if (deliveryDetails.delivery_side) order.delivery_side = deliveryDetails.delivery_side;
+      if (deliveryDetails.sector) order.sector = deliveryDetails.sector;
+      if (deliveryDetails.seat_row) order.seat_row = deliveryDetails.seat_row;
+      if (deliveryDetails.seat_number) order.seat_number = deliveryDetails.seat_number;
     }
 
     this.orders.set(orderId, order);
