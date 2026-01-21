@@ -418,13 +418,15 @@ async function processCheckout(ctx: Context, pickupLocation: 'left_buffer' | 'ri
   try {
     const cartOrder = await db.getOrCreateCartOrder(user.user_id);
     if (!cartOrder) {
-      await ctx.answerCbQuery('Ошибка получения корзины');
+      if (ctx.callbackQuery) await ctx.answerCbQuery('Ошибка получения корзины');
+      else await ctx.reply('Ошибка получения корзины');
       return;
     }
     
     const orderWithItems = await db.getOrderWithItems(cartOrder.id);
     if (!orderWithItems || orderWithItems.order_items.length === 0) {
-      await ctx.answerCbQuery('Корзина пуста');
+      if (ctx.callbackQuery) await ctx.answerCbQuery('Корзина пуста');
+      else await ctx.reply('Корзина пуста');
       return;
     }
     
@@ -443,20 +445,26 @@ async function processCheckout(ctx: Context, pickupLocation: 'left_buffer' | 'ri
         locationText = pickupLocation === 'left_buffer' ? 'Левый буфет' : 'Правый буфет';
       }
 
-      await ctx.reply(
-        `✅ Заказ #${cartOrder.id} успешно оформлен!\n\n` +
+      const message = `✅ Заказ #${cartOrder.id} успешно оформлен!\n\n` +
         `📍 Место получения: ${locationText}\n` +
         `💰 Сумма: ${formatPrice(orderWithItems.total_amount)}\n\n` +
-        `Ожидайте уведомления о готовности заказа.`
-      );
+        `Ожидайте уведомления о готовности заказа.`;
+
+      if (ctx.callbackQuery) {
+        await ctx.editMessageText(message);
+      } else {
+        await ctx.reply(message);
+      }
       
       await showCustomerMainMenu(ctx);
     } else {
-      await ctx.answerCbQuery('Ошибка оформления заказа');
+      if (ctx.callbackQuery) await ctx.answerCbQuery('Ошибка оформления заказа');
+      else await ctx.reply('Ошибка оформления заказа');
     }
   } catch (error) {
     console.error('Error processing checkout:', error);
-    await ctx.answerCbQuery('Произошла ошибка');
+    if (ctx.callbackQuery) await ctx.answerCbQuery('Произошла ошибка');
+    else await ctx.reply('Произошла ошибка');
   }
 }
 
