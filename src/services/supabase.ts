@@ -354,6 +354,35 @@ export class DatabaseService {
     }
   }
 
+  async getActiveOrdersForSeller(sellerRole: 'seller_left' | 'seller_right'): Promise<OrderWithItems[]> {
+    try {
+      const location = sellerRole === 'seller_left' ? 'left_buffer' : 'right_buffer';
+      
+      const { data, error } = await supabase
+        .from('orders')
+        .select(`
+          *,
+          order_items (
+            *,
+            product:products (*)
+          )
+        `)
+        .eq('pickup_location', location)
+        .in('status', ['preparing', 'ready_for_pickup'])
+        .order('created_at');
+
+      if (error) {
+        console.error('Error getting active orders for seller:', error);
+        return [];
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Exception in getActiveOrdersForSeller:', error);
+      return [];
+    }
+  }
+
   async getPendingDeliveryOrders(): Promise<OrderWithItems[]> {
     try {
       const { data, error } = await supabase
