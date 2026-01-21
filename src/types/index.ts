@@ -9,7 +9,7 @@ export interface User {
 export interface Product {
   id: number;
   name: string;
-  category: 'popcorn' | 'drinks' | 'cotton_candy';
+  category: 'popcorn' | 'drinks' | 'cotton_candy' | 'food' | 'sweets' | 'toys' | 'ice_cream';
   price: number;
   is_available: boolean;
 }
