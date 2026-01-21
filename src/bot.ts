@@ -24,7 +24,13 @@ function formatPrice(price: number): string {
 function formatOrder(order: OrderWithItems): string {
   let text = `📋 Заказ #${order.id}\n`;
   text += `📅 ${new Date(order.created_at).toLocaleString('ru')}\n`;
-  text += `📍 ${order.pickup_location === 'left_buffer' ? 'Левый буфет' : 'Правый буфет'}\n`;
+  
+  if (order.pickup_location === 'delivery') {
+    text += `📍 Доставка: ${order.delivery_side === 'left' ? 'Левая' : 'Правая'} сторона, Сектор ${order.sector}, Ряд ${order.seat_row}, Место ${order.seat_number}\n`;
+  } else {
+    text += `📍 ${order.pickup_location === 'left_buffer' ? 'Левый буфет' : 'Правый буфет'}\n`;
+  }
+  
   text += `📊 Статус: ${getStatusText(order.status)}\n\n`;
   
   text += `🛒 Состав заказа:\n`;
@@ -76,7 +82,12 @@ async function notifySellers(order: OrderWithItems): Promise<void> {
   try {
     if (!order.pickup_location) return;
 
-    const sellerRole = order.pickup_location === 'left_buffer' ? 'seller_left' : 'seller_right';
+    let sellerRole: string;
+    if (order.pickup_location === 'delivery') {
+      sellerRole = 'delivery';
+    } else {
+      sellerRole = order.pickup_location === 'left_buffer' ? 'seller_left' : 'seller_right';
+    }
     
     // In a real application, you would maintain a list of seller chat IDs
     // For now, we'll log the notification
@@ -328,6 +339,7 @@ bot.action('checkout_order', async (ctx) => {
   const keyboard = Markup.inlineKeyboard([
     [Markup.button.callback('📍 Левый буфет', 'pickup_left_buffer')],
     [Markup.button.callback('📍 Правый буфет', 'pickup_right_buffer')],
+    [Markup.button.callback('🚚 Доставка до места', 'pickup_delivery')],
     [Markup.button.callback('⬅️ Назад', 'show_cart')]
   ]);
   
@@ -335,6 +347,61 @@ bot.action('checkout_order', async (ctx) => {
     'Выберите место получения заказа:',
     keyboard
   );
+});
+
+bot.action('pickup_delivery', async (ctx) => {
+  const keyboard = Markup.inlineKeyboard([
+    [Markup.button.callback('⬅️ Левая сторона', 'delivery_side_left')],
+    [Markup.button.callback('➡️ Правая сторона', 'delivery_side_right')]
+  ]);
+  await ctx.editMessageText('Выберите сторону зала:', keyboard);
+});
+
+bot.action(/delivery_side_(left|right)/, async (ctx) => {
+  const side = ctx.match[1];
+  const session = getSession(ctx.from!.id);
+  session.delivery_side = side;
+  
+  const keyboard = Markup.inlineKeyboard([
+    [Markup.button.callback('1', 'delivery_sector_1'), Markup.button.callback('2', 'delivery_sector_2')],
+    [Markup.button.callback('3', 'delivery_sector_3'), Markup.button.callback('4', 'delivery_sector_4')]
+  ]);
+  await ctx.editMessageText('Выберите сектор:', keyboard);
+});
+
+bot.action(/delivery_sector_(\d)/, async (ctx) => {
+  const sector = parseInt(ctx.match[1]);
+  const session = getSession(ctx.from!.id);
+  session.delivery_sector = sector;
+  session.waiting_for_row = true;
+  await ctx.editMessageText('Введите номер ряда:');
+});
+
+bot.on('text', async (ctx, next) => {
+  const session = getSession(ctx.from!.id);
+  
+  if (session.waiting_for_row) {
+    session.delivery_row = ctx.message.text;
+    session.waiting_for_row = false;
+    session.waiting_for_seat = true;
+    await ctx.reply('Введите номер места:');
+    return;
+  }
+  
+  if (session.waiting_for_seat) {
+    session.delivery_seat = ctx.message.text;
+    session.waiting_for_seat = false;
+    
+    await processCheckout(ctx, 'delivery', {
+      delivery_side: session.delivery_side,
+      sector: session.delivery_sector,
+      seat_row: session.delivery_row,
+      seat_number: session.delivery_seat
+    });
+    return;
+  }
+  
+  return next();
 });
 
 bot.action('pickup_left_buffer', async (ctx) => {
@@ -345,7 +412,7 @@ bot.action('pickup_right_buffer', async (ctx) => {
   await processCheckout(ctx, 'right_buffer');
 });
 
-async function processCheckout(ctx: Context, pickupLocation: 'left_buffer' | 'right_buffer') {
+async function processCheckout(ctx: Context, pickupLocation: 'left_buffer' | 'right_buffer' | 'delivery', deliveryDetails?: any) {
   const user = ctx.state.user as User;
   
   try {
@@ -361,7 +428,7 @@ async function processCheckout(ctx: Context, pickupLocation: 'left_buffer' | 'ri
       return;
     }
     
-    const success = await db.updateOrderStatus(cartOrder.id, 'pending', pickupLocation);
+    const success = await db.updateOrderStatus(cartOrder.id, 'pending', pickupLocation, deliveryDetails);
     
     if (success) {
       const updatedOrder = await db.getOrderWithItems(cartOrder.id);
@@ -369,9 +436,16 @@ async function processCheckout(ctx: Context, pickupLocation: 'left_buffer' | 'ri
         await notifySellers(updatedOrder);
       }
       
-      await ctx.editMessageText(
+      let locationText = '';
+      if (pickupLocation === 'delivery') {
+        locationText = `Доставка (${deliveryDetails.delivery_side === 'left' ? 'Левая' : 'Правая'} сторона, Сектор ${deliveryDetails.sector}, Ряд ${deliveryDetails.seat_row}, Место ${deliveryDetails.seat_number})`;
+      } else {
+        locationText = pickupLocation === 'left_buffer' ? 'Левый буфет' : 'Правый буфет';
+      }
+
+      await ctx.reply(
         `✅ Заказ #${cartOrder.id} успешно оформлен!\n\n` +
-        `📍 Место получения: ${pickupLocation === 'left_buffer' ? 'Левый буфет' : 'Правый буфет'}\n` +
+        `📍 Место получения: ${locationText}\n` +
         `💰 Сумма: ${formatPrice(orderWithItems.total_amount)}\n\n` +
         `Ожидайте уведомления о готовности заказа.`
       );
@@ -523,7 +597,12 @@ bot.hears('📥 Новые заказы', async (ctx) => {
   const user = ctx.state.user as User;
   if (user.role === 'customer') return;
   
-  const orders = await db.getPendingOrdersForSeller(user.role as any);
+  let orders: OrderWithItems[];
+  if (user.role === 'delivery') {
+    orders = await db.getPendingDeliveryOrders();
+  } else {
+    orders = await db.getPendingOrdersForSeller(user.role as any);
+  }
   
   if (orders.length === 0) {
     await ctx.reply('Нет новых заказов.');
@@ -544,7 +623,12 @@ bot.hears('👨‍🍳 В работе', async (ctx) => {
   const user = ctx.state.user as User;
   if (user.role === 'customer') return;
   
-  const orders = await db.getActiveOrdersForSeller(user.role as any);
+  let orders: OrderWithItems[];
+  if (user.role === 'delivery') {
+    orders = await db.getActiveDeliveryOrders();
+  } else {
+    orders = await db.getActiveOrdersForSeller(user.role as any);
+  }
   const preparingOrders = orders.filter(o => o.status === 'preparing');
   
   if (preparingOrders.length === 0) {
@@ -566,7 +650,12 @@ bot.hears('✅ Готовые заказы', async (ctx) => {
   const user = ctx.state.user as User;
   if (user.role === 'customer') return;
   
-  const orders = await db.getActiveOrdersForSeller(user.role as any);
+  let orders: OrderWithItems[];
+  if (user.role === 'delivery') {
+    orders = await db.getActiveDeliveryOrders();
+  } else {
+    orders = await db.getActiveOrdersForSeller(user.role as any);
+  }
   const readyOrders = orders.filter(o => o.status === 'ready_for_pickup');
   
   if (readyOrders.length === 0) {

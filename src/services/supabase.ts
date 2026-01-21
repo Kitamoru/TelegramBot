@@ -273,7 +273,7 @@ export class DatabaseService {
     }
   }
 
-  async updateOrderStatus(orderId: number, status: Order['status'], pickupLocation?: string): Promise<boolean> {
+  async updateOrderStatus(orderId: number, status: Order['status'], pickupLocation?: string, deliveryDetails?: Partial<Order>): Promise<boolean> {
     if (USE_MEMORY_STORE) {
       return memoryStore.updateOrderStatus(orderId, status, pickupLocation);
     }
@@ -282,6 +282,9 @@ export class DatabaseService {
       const updateData: any = { status };
       if (pickupLocation) {
         updateData.pickup_location = pickupLocation;
+      }
+      if (deliveryDetails) {
+        Object.assign(updateData, deliveryDetails);
       }
 
       const { error } = await supabase
@@ -351,10 +354,8 @@ export class DatabaseService {
     }
   }
 
-  async getActiveOrdersForSeller(sellerRole: 'seller_left' | 'seller_right'): Promise<OrderWithItems[]> {
+  async getPendingDeliveryOrders(): Promise<OrderWithItems[]> {
     try {
-      const location = sellerRole === 'seller_left' ? 'left_buffer' : 'right_buffer';
-      
       const { data, error } = await supabase
         .from('orders')
         .select(`
@@ -364,18 +365,45 @@ export class DatabaseService {
             product:products (*)
           )
         `)
-        .eq('pickup_location', location)
-        .in('status', ['preparing', 'ready_for_pickup'])
+        .eq('pickup_location', 'delivery')
+        .eq('status', 'pending')
         .order('created_at');
 
       if (error) {
-        console.error('Error getting active orders for seller:', error);
+        console.error('Error getting pending delivery orders:', error);
         return [];
       }
 
       return data || [];
     } catch (error) {
-      console.error('Exception in getActiveOrdersForSeller:', error);
+      console.error('Exception in getPendingDeliveryOrders:', error);
+      return [];
+    }
+  }
+
+  async getActiveDeliveryOrders(): Promise<OrderWithItems[]> {
+    try {
+      const { data, error } = await supabase
+        .from('orders')
+        .select(`
+          *,
+          order_items (
+            *,
+            product:products (*)
+          )
+        `)
+        .eq('pickup_location', 'delivery')
+        .in('status', ['preparing', 'ready_for_pickup'])
+        .order('created_at');
+
+      if (error) {
+        console.error('Error getting active delivery orders:', error);
+        return [];
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Exception in getActiveDeliveryOrders:', error);
       return [];
     }
   }

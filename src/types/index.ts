@@ -2,7 +2,7 @@ export interface User {
   user_id: number;
   username?: string;
   full_name?: string;
-  role: 'customer' | 'seller_left' | 'seller_right';
+  role: 'customer' | 'seller_left' | 'seller_right' | 'delivery';
   created_at: string;
 }
 
@@ -18,7 +18,11 @@ export interface Order {
   id: number;
   customer_id: number;
   status: 'cart' | 'pending' | 'preparing' | 'ready_for_pickup' | 'completed' | 'cancelled';
-  pickup_location?: 'left_buffer' | 'right_buffer';
+  pickup_location?: 'left_buffer' | 'right_buffer' | 'delivery';
+  delivery_side?: 'left' | 'right';
+  sector?: number;
+  seat_row?: string;
+  seat_number?: string;
   total_amount: number;
   created_at: string;
   updated_at: string;
