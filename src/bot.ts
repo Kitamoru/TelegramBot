@@ -209,7 +209,8 @@ bot.hears('🍿 Заказать', async (ctx) => {
 async function showCategoriesMenu(ctx: Context) {
   const keyboard = Markup.keyboard([
     ['🍿 Попкорн', '🥤 Напитки'],
-    ['🍭 Сахарная вата'],
+    ['🍕 Еда', '🍬 Сладкое'],
+    ['🍦 Мороженое', '🧸 Игрушки'],
     ['⬅️ Назад']
   ]).resize();
   
@@ -225,8 +226,20 @@ bot.hears('🥤 Напитки', async (ctx) => {
   await showProductsInCategory(ctx, 'drinks');
 });
 
-bot.hears('🍭 Сахарная вата', async (ctx) => {
-  await showProductsInCategory(ctx, 'cotton_candy');
+bot.hears('🍕 Еда', async (ctx) => {
+  await showProductsInCategory(ctx, 'food');
+});
+
+bot.hears('🍬 Сладкое', async (ctx) => {
+  await showProductsInCategory(ctx, 'sweets');
+});
+
+bot.hears('🍦 Мороженое', async (ctx) => {
+  await showProductsInCategory(ctx, 'ice_cream');
+});
+
+bot.hears('🧸 Игрушки', async (ctx) => {
+  await showProductsInCategory(ctx, 'toys');
 });
 
 async function showProductsInCategory(ctx: Context, category: string) {
