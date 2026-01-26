@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS profiles (
 CREATE TABLE IF NOT EXISTS products (
     id SERIAL PRIMARY KEY,
     name TEXT NOT NULL,
-    category TEXT NOT NULL CHECK (category IN ('popcorn', 'drinks', 'cotton_candy')),
+    category TEXT NOT NULL CHECK (category IN ('popcorn', 'drinks', 'food', 'sweets', 'ice_cream', 'toys')),
     price DECIMAL(10,2) NOT NULL,
     is_available BOOLEAN DEFAULT TRUE
 );
@@ -27,7 +27,11 @@ CREATE TABLE IF NOT EXISTS orders (
     id SERIAL PRIMARY KEY,
     customer_id BIGINT REFERENCES profiles(user_id),
     status TEXT DEFAULT 'cart' CHECK (status IN ('cart', 'pending', 'preparing', 'ready_for_pickup', 'completed', 'cancelled')),
-    pickup_location TEXT CHECK (pickup_location IN ('left_buffer', 'right_buffer')),
+    pickup_location TEXT CHECK (pickup_location IN ('left_buffer', 'right_buffer', 'delivery')),
+    delivery_side TEXT CHECK (delivery_side IN ('left', 'right')),
+    sector TEXT,
+    seat_row TEXT,
+    seat_number TEXT,
     total_amount DECIMAL(10,2) DEFAULT 0,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
