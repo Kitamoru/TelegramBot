@@ -265,9 +265,46 @@ async function showProductsInCategory(ctx: Context, category: string) {
   await ctx.reply('Выберите товар:', keyboard);
 }
 
-// Handle product selection
+// Handle product selection - step 1: choose quantity
 bot.action(/add_product_(\d+)/, async (ctx) => {
   const productId = parseInt(ctx.match[1]);
+  
+  try {
+    const products = await getCachedProducts();
+    const product = products.find(p => p.id === productId);
+    
+    if (!product) {
+      await ctx.answerCbQuery('Товар не найден');
+      return;
+    }
+    
+    const keyboard = Markup.inlineKeyboard([
+      [
+        Markup.button.callback('1️⃣', `confirm_qty_${productId}_1`),
+        Markup.button.callback('2️⃣', `confirm_qty_${productId}_2`),
+        Markup.button.callback('3️⃣', `confirm_qty_${productId}_3`)
+      ],
+      [
+        Markup.button.callback('4️⃣', `confirm_qty_${productId}_4`),
+        Markup.button.callback('5️⃣', `confirm_qty_${productId}_5`)
+      ],
+      [Markup.button.callback('⬅️ Отмена', 'continue_shopping')]
+    ]);
+    
+    await ctx.editMessageText(
+      `Вы выбрали: *${product.name}*\nУкажите количество:`,
+      { parse_mode: 'Markdown', reply_markup: keyboard.reply_markup }
+    );
+  } catch (error) {
+    console.error('Error in quantity selection:', error);
+    await ctx.answerCbQuery('Произошла ошибка');
+  }
+});
+
+// Handle quantity confirmation - step 2: add to cart and show summary
+bot.action(/confirm_qty_(\d+)_(\d+)/, async (ctx) => {
+  const productId = parseInt(ctx.match[1]);
+  const quantity = parseInt(ctx.match[2]);
   const user = ctx.state.user as User;
   
   try {
@@ -281,30 +318,38 @@ bot.action(/add_product_(\d+)/, async (ctx) => {
     
     const cartOrder = await db.getOrCreateCartOrder(user.user_id);
     if (!cartOrder) {
-      await ctx.answerCbQuery('Ошибка создания корзины');
+      await ctx.answerCbQuery('Ошибка корзины');
       return;
     }
     
-    const success = await db.addItemToOrder(cartOrder.id, productId, 1, product.price);
+    const success = await db.addItemToOrder(cartOrder.id, productId, quantity, product.price);
     
     if (success) {
-      await ctx.answerCbQuery(`✅ ${product.name} добавлен в корзину`);
+      const orderWithItems = await db.getOrderWithItems(cartOrder.id);
       
+      let cartSummary = '';
+      if (orderWithItems) {
+        cartSummary = '\n\n🛒 *Текущий состав корзины:*\n';
+        for (const item of orderWithItems.order_items) {
+          cartSummary += `• ${item.product.name} x${item.quantity} = ${formatPrice(item.quantity * item.price_at_time)}\n`;
+        }
+        cartSummary += `💰 *Итого:* ${formatPrice(orderWithItems.total_amount)}`;
+      }
+
       const keyboard = Markup.inlineKeyboard([
-        [Markup.button.callback('➕ Еще один', `add_product_${productId}`)],
         [Markup.button.callback('🛒 Перейти в корзину', 'show_cart')],
         [Markup.button.callback('🍿 Продолжить покупки', 'continue_shopping')]
       ]);
       
       await ctx.editMessageText(
-        `✅ ${product.name} добавлен в корзину!\n\nЧто дальше?`,
-        keyboard
+        `✅ *Добавлено:* ${product.name} (x${quantity})${cartSummary}\n\nЧто дальше?`,
+        { parse_mode: 'Markdown', reply_markup: keyboard.reply_markup }
       );
     } else {
-      await ctx.answerCbQuery('Ошибка добавления товара');
+      await ctx.answerCbQuery('Ошибка добавления');
     }
   } catch (error) {
-    console.error('Error adding product:', error);
+    console.error('Error confirming quantity:', error);
     await ctx.answerCbQuery('Произошла ошибка');
   }
 });
