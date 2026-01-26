@@ -487,29 +487,26 @@ export class DatabaseService {
     }
   }
 
-  async cancelOrder(orderId: number): Promise<boolean> {
+  async clearCart(orderId: number): Promise<boolean> {
     if (USE_MEMORY_STORE) {
-      return memoryStore.updateOrderStatus(orderId, 'cancelled');
+      return memoryStore.clearCart(orderId);
     }
     
     try {
       const { error } = await supabase
-        .from('orders')
-        .update({ 
-          status: 'cancelled',
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', orderId)
-        .in('status', ['pending', 'preparing']); // Only allow cancelling pending or preparing orders
+        .from('order_items')
+        .delete()
+        .eq('order_id', orderId);
 
       if (error) {
-        console.error('Error cancelling order:', error);
+        console.error('Error clearing cart items:', error);
         return false;
       }
 
+      await this.updateOrderTotal(orderId);
       return true;
     } catch (error) {
-      console.error('Exception in cancelOrder:', error);
+      console.error('Exception in clearCart:', error);
       return false;
     }
   }

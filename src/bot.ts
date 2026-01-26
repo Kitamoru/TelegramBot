@@ -820,8 +820,29 @@ bot.action(/complete_order_(\d+)/, async (ctx) => {
 
 // Clear cart
 bot.action('clear_cart', async (ctx) => {
-  // Implementation for clearing cart would go here
-  await ctx.answerCbQuery('Функция очистки корзины будет добавлена');
+  const user = ctx.state.user as User;
+  
+  try {
+    const cartOrder = await db.getOrCreateCartOrder(user.user_id);
+    if (!cartOrder) {
+      await ctx.answerCbQuery('Ошибка получения корзины');
+      return;
+    }
+    
+    const success = await db.clearCart(cartOrder.id);
+    
+    if (success) {
+      await ctx.answerCbQuery('🗑 Корзина очищена');
+      await ctx.editMessageText('Ваша корзина очищена. Добавьте товары для оформления заказа.', Markup.inlineKeyboard([
+        [Markup.button.callback('🍿 Перейти к покупкам', 'continue_shopping')]
+      ]));
+    } else {
+      await ctx.answerCbQuery('Ошибка при очистке');
+    }
+  } catch (error) {
+    console.error('Error clearing cart:', error);
+    await ctx.answerCbQuery('Произошла ошибка');
+  }
 });
 
 // Back navigation

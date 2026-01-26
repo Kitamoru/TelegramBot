@@ -186,6 +186,15 @@ class MemoryStore {
     return true;
   }
 
+  clearCart(orderId: number): boolean {
+    if (this.orderItems.has(orderId)) {
+      this.orderItems.set(orderId, []);
+      this.updateOrderTotal(orderId);
+      return true;
+    }
+    return false;
+  }
+
   getOrdersByCustomer(customerId: number): Order[] {
     return Array.from(this.orders.values())
       .filter(order => order.customer_id === customerId && order.status !== 'cart')
