@@ -631,7 +631,7 @@ bot.action(/confirm_cancel_(\d+)/, async (ctx) => {
   const user = ctx.state.user as User;
   
   try {
-    const success = await db.cancelOrder(orderId);
+    const success = await db.atomicStatusUpdate(orderId, 'preparing', 'cancelled');
     
     if (success) {
       await ctx.editMessageText(
