@@ -631,7 +631,13 @@ bot.action(/confirm_cancel_(\d+)/, async (ctx) => {
   const user = ctx.state.user as User;
   
   try {
-    const success = await db.atomicStatusUpdate(orderId, 'preparing', 'cancelled');
+    // Try to cancel from 'pending' status first (most common for new orders)
+    let success = await db.atomicStatusUpdate(orderId, 'pending', 'cancelled');
+    
+    // If not successful (maybe it's already in 'preparing'), try 'preparing'
+    if (!success) {
+      success = await db.atomicStatusUpdate(orderId, 'preparing', 'cancelled');
+    }
     
     if (success) {
       await ctx.editMessageText(
