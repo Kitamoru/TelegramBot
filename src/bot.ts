@@ -188,21 +188,6 @@ async function getCartItemsCount(orderId: number): Promise<number> {
 
 // Handle customer menu
 bot.hears('🍿 Заказать', async (ctx) => {
-  const user = ctx.state.user as User;
-  
-  // Check for active orders
-  const orders = await db.getOrdersByCustomer(user.user_id);
-  const activeOrder = orders.find(order => 
-    !['cart', 'completed', 'cancelled'].includes(order.status)
-  );
-  
-  if (activeOrder) {
-    await ctx.reply(
-      `У вас есть активный заказ #${activeOrder.id}\nСтатус: ${getStatusText(activeOrder.status)}\n\nДождитесь завершения текущего заказа перед оформлением нового.`
-    );
-    return;
-  }
-  
   await showCategoriesMenu(ctx);
 });
 
