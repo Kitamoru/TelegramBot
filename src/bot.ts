@@ -450,23 +450,36 @@ bot.action(/update_item_qty_(\d+)_(\d+)/, async (ctx) => {
   const cartOrder = await db.getOrCreateCartOrder(user.user_id);
   if (!cartOrder) return ctx.answerCbQuery('Ошибка корзины');
 
+  const orderWithItems = await db.getOrderWithItems(cartOrder.id);
+  const currentItem = orderWithItems?.order_items.find(i => i.product_id === productId);
+  
+  if (currentItem && currentItem.quantity === quantity) {
+    return ctx.answerCbQuery(`Количество уже ${quantity}`);
+  }
+
   const success = await db.updateItemQuantity(cartOrder.id, productId, quantity);
   if (success) {
     await ctx.answerCbQuery(`Количество обновлено: ${quantity}`);
-    // Refresh the item menu to show new quantity
-    return ctx.editMessageReplyMarkup(Markup.inlineKeyboard([
-      [
-        Markup.button.callback('1️⃣', `update_item_qty_${productId}_1`),
-        Markup.button.callback('2️⃣', `update_item_qty_${productId}_2`),
-        Markup.button.callback('3️⃣', `update_item_qty_${productId}_3`)
-      ],
-      [
-        Markup.button.callback('4️⃣', `update_item_qty_${productId}_4`),
-        Markup.button.callback('5️⃣', `update_item_qty_${productId}_5`)
-      ],
-      [Markup.button.callback('🗑 Удалить позицию', `remove_item_${productId}`)],
-      [Markup.button.callback('⬅️ Назад к списку', 'edit_cart')]
-    ]).reply_markup);
+    
+    return ctx.editMessageText(
+      `Редактирование: *${currentItem?.product.name}*\nТекущее количество: ${quantity}`,
+      {
+        parse_mode: 'Markdown',
+        reply_markup: Markup.inlineKeyboard([
+          [
+            Markup.button.callback('1️⃣', `update_item_qty_${productId}_1`),
+            Markup.button.callback('2️⃣', `update_item_qty_${productId}_2`),
+            Markup.button.callback('3️⃣', `update_item_qty_${productId}_3`)
+          ],
+          [
+            Markup.button.callback('4️⃣', `update_item_qty_${productId}_4`),
+            Markup.button.callback('5️⃣', `update_item_qty_${productId}_5`)
+          ],
+          [Markup.button.callback('🗑 Удалить позицию', `remove_item_${productId}`)],
+          [Markup.button.callback('⬅️ Назад к списку', 'edit_cart')]
+        ]).reply_markup
+      }
+    );
   }
   await ctx.answerCbQuery('Ошибка обновления');
 });
