@@ -379,12 +379,123 @@ async function showCart(ctx: Context) {
   
   const keyboard = Markup.inlineKeyboard([
     [Markup.button.callback('📝 Оформить заказ', 'checkout_order')],
+    [Markup.button.callback('✏️ Редактировать корзину', 'edit_cart')],
     [Markup.button.callback('🗑 Очистить корзину', 'clear_cart')],
     [Markup.button.callback('🍿 Продолжить покупки', 'continue_shopping')]
   ]);
   
   await ctx.reply(text, keyboard);
 }
+
+// Edit Cart Handlers
+bot.action('edit_cart', async (ctx) => {
+  const user = ctx.state.user as User;
+  const cartOrder = await db.getOrCreateCartOrder(user.user_id);
+  
+  if (!cartOrder) return ctx.answerCbQuery('Ошибка корзины');
+  
+  const orderWithItems = await db.getOrderWithItems(cartOrder.id);
+  if (!orderWithItems || orderWithItems.order_items.length === 0) {
+    return ctx.editMessageText('Корзина пуста', Markup.inlineKeyboard([
+      [Markup.button.callback('🍿 К покупкам', 'continue_shopping')]
+    ]));
+  }
+
+  const buttons = orderWithItems.order_items.map(item => [
+    Markup.button.callback(item.product.name, `edit_item_${item.product_id}`)
+  ]);
+  
+  buttons.push([Markup.button.callback('✅ Готово', 'show_cart')]);
+
+  await ctx.editMessageText('Выберите товар для редактирования:', Markup.inlineKeyboard(buttons));
+});
+
+bot.action(/edit_item_(\d+)/, async (ctx) => {
+  const productId = parseInt(ctx.match[1]);
+  const user = ctx.state.user as User;
+  const cartOrder = await db.getOrCreateCartOrder(user.user_id);
+  
+  if (!cartOrder) return ctx.answerCbQuery('Ошибка корзины');
+  
+  const orderWithItems = await db.getOrderWithItems(cartOrder.id);
+  const item = orderWithItems?.order_items.find(i => i.product_id === productId);
+  
+  if (!item) return ctx.answerCbQuery('Товар не найден');
+
+  const keyboard = Markup.inlineKeyboard([
+    [
+      Markup.button.callback('1️⃣', `update_item_qty_${productId}_1`),
+      Markup.button.callback('2️⃣', `update_item_qty_${productId}_2`),
+      Markup.button.callback('3️⃣', `update_item_qty_${productId}_3`)
+    ],
+    [
+      Markup.button.callback('4️⃣', `update_item_qty_${productId}_4`),
+      Markup.button.callback('5️⃣', `update_item_qty_${productId}_5`)
+    ],
+    [Markup.button.callback('🗑 Удалить позицию', `remove_item_${productId}`)],
+    [Markup.button.callback('⬅️ Назад к списку', 'edit_cart')]
+  ]);
+
+  await ctx.editMessageText(
+    `Редактирование: *${item.product.name}*\nТекущее количество: ${item.quantity}`,
+    { parse_mode: 'Markdown', reply_markup: keyboard.reply_markup }
+  );
+});
+
+bot.action(/update_item_qty_(\d+)_(\d+)/, async (ctx) => {
+  const productId = parseInt(ctx.match[1]);
+  const quantity = parseInt(ctx.match[2]);
+  const user = ctx.state.user as User;
+  
+  const cartOrder = await db.getOrCreateCartOrder(user.user_id);
+  if (!cartOrder) return ctx.answerCbQuery('Ошибка корзины');
+
+  const success = await db.updateItemQuantity(cartOrder.id, productId, quantity);
+  if (success) {
+    await ctx.answerCbQuery(`Количество обновлено: ${quantity}`);
+    // Refresh the item menu to show new quantity
+    return ctx.editMessageReplyMarkup(Markup.inlineKeyboard([
+      [
+        Markup.button.callback('1️⃣', `update_item_qty_${productId}_1`),
+        Markup.button.callback('2️⃣', `update_item_qty_${productId}_2`),
+        Markup.button.callback('3️⃣', `update_item_qty_${productId}_3`)
+      ],
+      [
+        Markup.button.callback('4️⃣', `update_item_qty_${productId}_4`),
+        Markup.button.callback('5️⃣', `update_item_qty_${productId}_5`)
+      ],
+      [Markup.button.callback('🗑 Удалить позицию', `remove_item_${productId}`)],
+      [Markup.button.callback('⬅️ Назад к списку', 'edit_cart')]
+    ]).reply_markup);
+  }
+  await ctx.answerCbQuery('Ошибка обновления');
+});
+
+bot.action(/remove_item_(\d+)/, async (ctx) => {
+  const productId = parseInt(ctx.match[1]);
+  const user = ctx.state.user as User;
+  
+  const cartOrder = await db.getOrCreateCartOrder(user.user_id);
+  if (!cartOrder) return ctx.answerCbQuery('Ошибка корзины');
+
+  const success = await db.removeItemFromOrder(cartOrder.id, productId);
+  if (success) {
+    await ctx.answerCbQuery('Товар удален');
+    // Go back to the edit list
+    const orderWithItems = await db.getOrderWithItems(cartOrder.id);
+    if (!orderWithItems || orderWithItems.order_items.length === 0) {
+      return ctx.editMessageText('Корзина пуста', Markup.inlineKeyboard([
+        [Markup.button.callback('🍿 К покупкам', 'continue_shopping')]
+      ]));
+    }
+    const buttons = orderWithItems.order_items.map(item => [
+      Markup.button.callback(item.product.name, `edit_item_${item.product_id}`)
+    ]);
+    buttons.push([Markup.button.callback('✅ Готово', 'show_cart')]);
+    return ctx.editMessageText('Выберите товар для редактирования:', Markup.inlineKeyboard(buttons));
+  }
+  await ctx.answerCbQuery('Ошибка удаления');
+});
 
 // Checkout process
 bot.action('checkout_order', async (ctx) => {

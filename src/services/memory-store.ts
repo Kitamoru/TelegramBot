@@ -186,6 +186,30 @@ class MemoryStore {
     return true;
   }
 
+  updateItemQuantity(orderId: number, productId: number, quantity: number): boolean {
+    const items = this.orderItems.get(orderId);
+    if (items) {
+      const item = items.find(i => i.product_id === productId);
+      if (item) {
+        item.quantity = quantity;
+        this.updateOrderTotal(orderId);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  removeItemFromOrder(orderId: number, productId: number): boolean {
+    const items = this.orderItems.get(orderId);
+    if (items) {
+      const filteredItems = items.filter(i => i.product_id !== productId);
+      this.orderItems.set(orderId, filteredItems);
+      this.updateOrderTotal(orderId);
+      return true;
+    }
+    return false;
+  }
+
   clearCart(orderId: number): boolean {
     if (this.orderItems.has(orderId)) {
       this.orderItems.set(orderId, []);

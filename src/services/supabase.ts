@@ -487,6 +487,56 @@ export class DatabaseService {
     }
   }
 
+  async updateItemQuantity(orderId: number, productId: number, quantity: number): Promise<boolean> {
+    if (USE_MEMORY_STORE) {
+      return memoryStore.updateItemQuantity(orderId, productId, quantity);
+    }
+    
+    try {
+      const { error } = await supabase
+        .from('order_items')
+        .update({ quantity })
+        .eq('order_id', orderId)
+        .eq('product_id', productId);
+
+      if (error) {
+        console.error('Error updating item quantity:', error);
+        return false;
+      }
+
+      await this.updateOrderTotal(orderId);
+      return true;
+    } catch (error) {
+      console.error('Exception in updateItemQuantity:', error);
+      return false;
+    }
+  }
+
+  async removeItemFromOrder(orderId: number, productId: number): Promise<boolean> {
+    if (USE_MEMORY_STORE) {
+      return memoryStore.removeItemFromOrder(orderId, productId);
+    }
+    
+    try {
+      const { error } = await supabase
+        .from('order_items')
+        .delete()
+        .eq('order_id', orderId)
+        .eq('product_id', productId);
+
+      if (error) {
+        console.error('Error removing item from order:', error);
+        return false;
+      }
+
+      await this.updateOrderTotal(orderId);
+      return true;
+    } catch (error) {
+      console.error('Exception in removeItemFromOrder:', error);
+      return false;
+    }
+  }
+
   async clearCart(orderId: number): Promise<boolean> {
     if (USE_MEMORY_STORE) {
       return memoryStore.clearCart(orderId);
