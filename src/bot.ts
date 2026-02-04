@@ -47,7 +47,7 @@ function formatOrder(order: OrderWithItems): string {
     text += `• ${item.product.name} x${item.quantity} = ${formatPrice(item.quantity * item.price_at_time)}\n`;
   }
   
-  text += `\n💰 Итого: ${formatPrice(order.total_amount)}\n`;
+  text += `\n💰 Итого: ${formatPrice(order.total_amount)}\n\n`;
   text += `📅 ${new Date(order.created_at).toLocaleString('ru')}`; // Время в самый низ
   
   return text;
