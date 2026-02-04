@@ -25,7 +25,7 @@ const deliveryCache = new Map<number, any>();
 
 function formatOrder(order: OrderWithItems): string {
   let text = `📋 Заказ #${order.id}\n`;
-  text += `📅 ${new Date(order.created_at).toLocaleString('ru')}\n`;
+  text += ` \n`; // Пробел вместо даты
   
   // Use cached delivery details if DB fields are missing (schema cache issue)
   const cachedDetails = deliveryCache.get(order.id);
@@ -47,7 +47,8 @@ function formatOrder(order: OrderWithItems): string {
     text += `• ${item.product.name} x${item.quantity} = ${formatPrice(item.quantity * item.price_at_time)}\n`;
   }
   
-  text += `\n💰 Итого: ${formatPrice(order.total_amount)}`;
+  text += `\n💰 Итого: ${formatPrice(order.total_amount)}\n`;
+  text += `📅 ${new Date(order.created_at).toLocaleString('ru')}`; // Время в самый низ
   
   return text;
 }
@@ -898,10 +899,13 @@ bot.action(/ready_order_(\d+)/, async (ctx) => {
       const order = await db.getOrderWithItems(orderId);
       if (order) {
         try {
-          await bot.telegram.sendMessage(
-            order.customer_id,
-            `🔔 Ваш заказ готов к получению!\n\n${formatOrder(order)}`
-          );
+          let readyMessage = `✅ Ваш заказ #${orderId} готов! `;
+          if (order.pickup_location === 'delivery') {
+            readyMessage = `✅ Ваш заказ #${orderId} готов и скоро будет доставлен к вашему месту! 🍿🚚`;
+          } else {
+            readyMessage += `Пожалуйста, заберите его в ${order.pickup_location === 'left_buffer' ? 'левом буфете' : 'правом буфете'}.`;
+          }
+          await bot.telegram.sendMessage(order.customer_id, readyMessage);
         } catch (error) {
           console.log('Could not notify customer:', error);
         }
