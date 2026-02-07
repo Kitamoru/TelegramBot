@@ -44,7 +44,12 @@ function formatOrder(order: OrderWithItems): string {
   
   text += `🛒 Состав заказа:\n`;
   for (const item of order.order_items) {
-    text += `• ${item.product.name} x${item.quantity} = ${formatPrice(item.quantity * item.price_at_time)}\n`;
+    const categoryName = getCategoryDisplayName(item.product.category);
+    let itemName = item.product.name;
+    if (['cotton_candy', 'popcorn', 'ice_cream_premium'].includes(item.product.category)) {
+      itemName = `${categoryName} - ${item.product.name}`;
+    }
+    text += `• ${itemName} x${item.quantity} = ${formatPrice(item.quantity * item.price_at_time)}\n`;
   }
   
   text += `\n💰 Итого: ${formatPrice(order.total_amount)}\n\n`;
@@ -237,6 +242,20 @@ bot.hears('🍦 Мороженое Премиум', async (ctx) => {
   await showProductsInCategory(ctx, 'ice_cream_premium');
 });
 
+function getCategoryDisplayName(category: string): string {
+  switch (category) {
+    case 'cotton_candy': return 'Сахарная вата';
+    case 'popcorn': return 'Попкорн';
+    case 'water_juice': return 'Вода/Сок';
+    case 'lemonades': return 'Лимонады';
+    case 'hot_drinks': return 'Горячие напитки';
+    case 'food': return 'Еда';
+    case 'desserts': return 'Десерты';
+    case 'ice_cream_premium': return 'Мороженое';
+    default: return '';
+  }
+}
+
 async function showProductsInCategory(ctx: Context, category: string) {
   const products = await getCachedProductsByCategory(category);
   
@@ -245,19 +264,24 @@ async function showProductsInCategory(ctx: Context, category: string) {
     return;
   }
   
-  const buttons = products.map(product => 
-    Markup.button.callback(
-      `${product.name} - ${formatPrice(product.price)}`,
+  const categoryName = getCategoryDisplayName(category);
+  const buttons = products.map(product => {
+    let displayName = product.name;
+    if (['cotton_candy', 'popcorn', 'ice_cream_premium'].includes(category)) {
+      displayName = `${categoryName} - ${product.name}`;
+    }
+    return Markup.button.callback(
+      `${displayName} - ${formatPrice(product.price)}`,
       `add_product_${product.id}`
-    )
-  );
+    );
+  });
   
   // Add buttons in rows of 1
   const keyboard = Markup.inlineKeyboard(
     buttons.map(button => [button])
   );
   
-  await ctx.reply('Выберите товар:', keyboard);
+  await ctx.reply(`Товары в категории ${categoryName}:`, keyboard);
 }
 
 // Handle product selection - step 1: choose quantity
@@ -271,6 +295,12 @@ bot.action(/add_product_(\d+)/, async (ctx) => {
     if (!product) {
       await ctx.answerCbQuery('Товар не найден');
       return;
+    }
+
+    const categoryName = getCategoryDisplayName(product.category);
+    let displayName = product.name;
+    if (['cotton_candy', 'popcorn', 'ice_cream_premium'].includes(product.category)) {
+      displayName = `${categoryName} - ${product.name}`;
     }
     
     const keyboard = Markup.inlineKeyboard([
@@ -287,7 +317,7 @@ bot.action(/add_product_(\d+)/, async (ctx) => {
     ]);
     
     await ctx.editMessageText(
-      `Вы выбрали: *${product.name}*\nУкажите количество:`,
+      `Вы выбрали: *${displayName}*\nУкажите количество:`,
       { parse_mode: 'Markdown', reply_markup: keyboard.reply_markup }
     );
   } catch (error) {
@@ -326,7 +356,12 @@ bot.action(/confirm_qty_(\d+)_(\d+)/, async (ctx) => {
       if (orderWithItems) {
         cartSummary = '\n\n🛒 *Текущий состав корзины:*\n';
         for (const item of orderWithItems.order_items) {
-          cartSummary += `• ${item.product.name} x${item.quantity} = ${formatPrice(item.quantity * item.price_at_time)}\n`;
+          const categoryName = getCategoryDisplayName(item.product.category);
+          let itemName = item.product.name;
+          if (['cotton_candy', 'popcorn', 'ice_cream_premium'].includes(item.product.category)) {
+            itemName = `${categoryName} - ${item.product.name}`;
+          }
+          cartSummary += `• ${itemName} x${item.quantity} = ${formatPrice(item.quantity * item.price_at_time)}\n`;
         }
         cartSummary += `💰 *Итого:* ${formatPrice(orderWithItems.total_amount)}`;
       }
@@ -383,7 +418,12 @@ async function showCart(ctx: Context) {
   
   let text = '🛒 Ваша корзина:\n\n';
   for (const item of orderWithItems.order_items) {
-    text += `• ${item.product.name} x${item.quantity} = ${formatPrice(item.quantity * item.price_at_time)}\n`;
+    const categoryName = getCategoryDisplayName(item.product.category);
+    let itemName = item.product.name;
+    if (['cotton_candy', 'popcorn', 'ice_cream_premium'].includes(item.product.category)) {
+      itemName = `${categoryName} - ${item.product.name}`;
+    }
+    text += `• ${itemName} x${item.quantity} = ${formatPrice(item.quantity * item.price_at_time)}\n`;
   }
   text += `\n💰 Итого: ${formatPrice(orderWithItems.total_amount)}`;
   
@@ -411,9 +451,16 @@ bot.action('edit_cart', async (ctx) => {
     ]));
   }
 
-  const buttons = orderWithItems.order_items.map(item => [
-    Markup.button.callback(item.product.name, `edit_item_${item.product_id}`)
-  ]);
+  const buttons = orderWithItems.order_items.map(item => {
+    const categoryName = getCategoryDisplayName(item.product.category);
+    let itemName = item.product.name;
+    if (['cotton_candy', 'popcorn', 'ice_cream_premium'].includes(item.product.category)) {
+      itemName = `${categoryName} - ${item.product.name}`;
+    }
+    return [
+      Markup.button.callback(itemName, `edit_item_${item.product_id}`)
+    ];
+  });
   
   buttons.push([Markup.button.callback('✅ Готово', 'show_cart')]);
 
@@ -432,6 +479,12 @@ bot.action(/edit_item_(\d+)/, async (ctx) => {
   
   if (!item) return ctx.answerCbQuery('Товар не найден');
 
+  const categoryName = getCategoryDisplayName(item.product.category);
+  let itemName = item.product.name;
+  if (['cotton_candy', 'popcorn', 'ice_cream_premium'].includes(item.product.category)) {
+    itemName = `${categoryName} - ${item.product.name}`;
+  }
+
   const keyboard = Markup.inlineKeyboard([
     [
       Markup.button.callback('1️⃣', `update_item_qty_${productId}_1`),
@@ -447,7 +500,7 @@ bot.action(/edit_item_(\d+)/, async (ctx) => {
   ]);
 
   await ctx.editMessageText(
-    `Редактирование: *${item.product.name}*\nТекущее количество:  ${item.quantity}`,
+    `Редактирование: *${itemName}*\nТекущее количество:  ${item.quantity}`,
     { parse_mode: 'Markdown', reply_markup: keyboard.reply_markup }
   );
 });
@@ -471,8 +524,14 @@ bot.action(/update_item_qty_(\d+)_(\d+)/, async (ctx) => {
   if (success) {
     await ctx.answerCbQuery(`Количество обновлено: ${quantity}`);
     
+    const categoryName = getCategoryDisplayName(currentItem?.product.category || '');
+    let itemName = currentItem?.product.name || '';
+    if (currentItem && ['cotton_candy', 'popcorn', 'ice_cream_premium'].includes(currentItem.product.category)) {
+      itemName = `${categoryName} - ${currentItem.product.name}`;
+    }
+
     return ctx.editMessageText(
-      `Редактирование: *${currentItem?.product.name}*\nТекущее количество:  ${quantity}`,
+      `Редактирование: *${itemName}*\nТекущее количество:  ${quantity}`,
       {
         parse_mode: 'Markdown',
         reply_markup: Markup.inlineKeyboard([
