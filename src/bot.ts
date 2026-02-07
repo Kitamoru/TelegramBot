@@ -37,7 +37,7 @@ function formatOrder(order: OrderWithItems): string {
   if (order.pickup_location === 'delivery') {
     text += `📍 Доставка: ${delivery_side === 'left' ? 'Левая' : 'Правая'} сторона, Сектор ${sector}, Ряд ${seat_row}, Место ${seat_number}\n`;
   } else {
-    text += `📍 ${order.pickup_location === 'left_buffer' ? 'Левый буфет' : 'Правый буфет'}\n`;
+    text += `📍 ${order.pickup_location === 'left_buffer' ? 'Левый буфет, 2 этаж' : 'Правый буфет, 2 этаж'}\n`;
   }
   
   text += `📊 Статус: ${getStatusText(order.status)}\n\n`;
@@ -194,9 +194,10 @@ bot.hears('🍿 Заказать', async (ctx) => {
 
 async function showCategoriesMenu(ctx: Context) {
   const keyboard = Markup.keyboard([
-    ['🍿 Попкорн', '🥤 Напитки'],
-    ['🍕 Еда', '🍬 Сладкое'],
-    ['🍦 Мороженое', '🧸 Игрушки'],
+    ['☁️ Сахарная вата', '🍿 Попкорн'],
+    ['🧃 Вода/Сок', '🍋 Лимонады'],
+    ['☕️ Горячие напитки', '🌭 Еда'],
+    ['🍰 Десерты', '🍦 Мороженое Премиум'],
     ['⬅️ Назад']
   ]).resize();
   
@@ -204,28 +205,36 @@ async function showCategoriesMenu(ctx: Context) {
 }
 
 // Category handlers
+bot.hears('☁️ Сахарная вата', async (ctx) => {
+  await showProductsInCategory(ctx, 'cotton_candy');
+});
+
 bot.hears('🍿 Попкорн', async (ctx) => {
   await showProductsInCategory(ctx, 'popcorn');
 });
 
-bot.hears('🥤 Напитки', async (ctx) => {
-  await showProductsInCategory(ctx, 'drinks');
+bot.hears('🧃 Вода/Сок', async (ctx) => {
+  await showProductsInCategory(ctx, 'water_juice');
 });
 
-bot.hears('🍕 Еда', async (ctx) => {
+bot.hears('🍋 Лимонады', async (ctx) => {
+  await showProductsInCategory(ctx, 'lemonades');
+});
+
+bot.hears('☕️ Горячие напитки', async (ctx) => {
+  await showProductsInCategory(ctx, 'hot_drinks');
+});
+
+bot.hears('🌭 Еда', async (ctx) => {
   await showProductsInCategory(ctx, 'food');
 });
 
-bot.hears('🍬 Сладкое', async (ctx) => {
-  await showProductsInCategory(ctx, 'sweets');
+bot.hears('🍰 Десерты', async (ctx) => {
+  await showProductsInCategory(ctx, 'desserts');
 });
 
-bot.hears('🍦 Мороженое', async (ctx) => {
-  await showProductsInCategory(ctx, 'ice_cream');
-});
-
-bot.hears('🧸 Игрушки', async (ctx) => {
-  await showProductsInCategory(ctx, 'toys');
+bot.hears('🍦 Мороженое Премиум', async (ctx) => {
+  await showProductsInCategory(ctx, 'ice_cream_premium');
 });
 
 async function showProductsInCategory(ctx: Context, category: string) {
@@ -438,7 +447,7 @@ bot.action(/edit_item_(\d+)/, async (ctx) => {
   ]);
 
   await ctx.editMessageText(
-    `Редактирование: *${item.product.name}*\nТекущее количество: ${item.quantity}`,
+    `Редактирование: *${item.product.name}*\nТекущее количество:  ${item.quantity}`,
     { parse_mode: 'Markdown', reply_markup: keyboard.reply_markup }
   );
 });
@@ -463,7 +472,7 @@ bot.action(/update_item_qty_(\d+)_(\d+)/, async (ctx) => {
     await ctx.answerCbQuery(`Количество обновлено: ${quantity}`);
     
     return ctx.editMessageText(
-      `Редактирование: *${currentItem?.product.name}*\nТекущее количество: ${quantity}`,
+      `Редактирование: *${currentItem?.product.name}*\nТекущее количество:  ${quantity}`,
       {
         parse_mode: 'Markdown',
         reply_markup: Markup.inlineKeyboard([
@@ -514,8 +523,8 @@ bot.action(/remove_item_(\d+)/, async (ctx) => {
 // Checkout process
 bot.action('checkout_order', async (ctx) => {
   const keyboard = Markup.inlineKeyboard([
-    [Markup.button.callback('📍 Левый буфет', 'pickup_left_buffer')],
-    [Markup.button.callback('📍 Правый буфет', 'pickup_right_buffer')],
+    [Markup.button.callback('📍 Левый буфет, 2 этаж', 'pickup_left_buffer')],
+    [Markup.button.callback('📍 Правый буфет, 2 этаж', 'pickup_right_buffer')],
     [Markup.button.callback('🚚 Доставка до места', 'pickup_delivery')],
     [Markup.button.callback('⬅️ Назад', 'show_cart')]
   ]);
@@ -622,7 +631,7 @@ async function processCheckout(ctx: Context, pickupLocation: 'left_buffer' | 'ri
       if (pickupLocation === 'delivery') {
         locationText = `Доставка (${deliveryDetails.delivery_side === 'left' ? 'Левая' : 'Правая'} сторона, Сектор ${deliveryDetails.sector}, Ряд ${deliveryDetails.seat_row}, Место ${deliveryDetails.seat_number})`;
       } else {
-        locationText = pickupLocation === 'left_buffer' ? 'Левый буфет' : 'Правый буфет';
+        locationText = pickupLocation === 'left_buffer' ? 'Левый буфет, 2 этаж' : 'Правый буфет, 2 этаж';
       }
 
       const message = `✅ Заказ #${cartOrder.id} успешно оформлен!\n\n` +
@@ -899,12 +908,12 @@ bot.action(/ready_order_(\d+)/, async (ctx) => {
       const order = await db.getOrderWithItems(orderId);
       if (order) {
         try {
-          let readyMessage = `✅ Ваш заказ #${orderId} готов! `;
-          if (order.pickup_location === 'delivery') {
-            readyMessage = `✅ Ваш заказ #${orderId} готов и скоро будет доставлен к вашему месту! 🍿🚚`;
-          } else {
-            readyMessage += `Пожалуйста, заберите его в ${order.pickup_location === 'left_buffer' ? 'левом буфете' : 'правом буфете'}.`;
-          }
+        let readyMessage = `✅ Ваш заказ #${orderId} готов! `;
+        if (order.pickup_location === 'delivery') {
+          readyMessage = `✅ Ваш заказ #${orderId} готов и скоро будет доставлен к вашему месту! 🍿🚚`;
+        } else {
+          readyMessage += `Пожалуйста, заберите его в ${order.pickup_location === 'left_buffer' ? 'левом буфете, 2 этаж' : 'правом буфете, 2 этаж'}.`;
+        }
           await bot.telegram.sendMessage(order.customer_id, readyMessage);
         } catch (error) {
           console.log('Could not notify customer:', error);
