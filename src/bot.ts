@@ -47,7 +47,9 @@ function formatOrder(order: OrderWithItems): string {
     const categoryName = getCategoryDisplayName(item.product.category);
     let itemName = item.product.name;
     if (['cotton_candy', 'popcorn', 'ice_cream_premium'].includes(item.product.category)) {
-      itemName = `${categoryName} - ${item.product.name}`;
+      if (item.product.name.toLowerCase() !== 'начос сырный') {
+        itemName = `${categoryName} - ${item.product.name}`;
+      }
     }
     text += `• ${itemName} x${item.quantity} = ${formatPrice(item.quantity * item.price_at_time)}\n`;
   }
@@ -268,7 +270,10 @@ async function showProductsInCategory(ctx: Context, category: string) {
   const buttons = products.map(product => {
     let displayName = product.name;
     if (['cotton_candy', 'popcorn', 'ice_cream_premium'].includes(category)) {
-      displayName = `${categoryName} - ${product.name}`;
+      // Исключаем "Начос сырный" из префикса "Попкорн"
+      if (product.name.toLowerCase() !== 'начос сырный') {
+        displayName = `${categoryName} - ${product.name}`;
+      }
     }
     return Markup.button.callback(
       `${displayName} - ${formatPrice(product.price)}`,
@@ -300,7 +305,9 @@ bot.action(/add_product_(\d+)/, async (ctx) => {
     const categoryName = getCategoryDisplayName(product.category);
     let displayName = product.name;
     if (['cotton_candy', 'popcorn', 'ice_cream_premium'].includes(product.category)) {
-      displayName = `${categoryName} - ${product.name}`;
+      if (product.name.toLowerCase() !== 'начос сырный') {
+        displayName = `${categoryName} - ${product.name}`;
+      }
     }
     
     const keyboard = Markup.inlineKeyboard([
@@ -359,7 +366,9 @@ bot.action(/confirm_qty_(\d+)_(\d+)/, async (ctx) => {
           const categoryName = getCategoryDisplayName(item.product.category);
           let itemName = item.product.name;
           if (['cotton_candy', 'popcorn', 'ice_cream_premium'].includes(item.product.category)) {
-            itemName = `${categoryName} - ${item.product.name}`;
+            if (item.product.name.toLowerCase() !== 'начос сырный') {
+              itemName = `${categoryName} - ${item.product.name}`;
+            }
           }
           cartSummary += `• ${itemName} x${item.quantity} = ${formatPrice(item.quantity * item.price_at_time)}\n`;
         }
@@ -421,7 +430,9 @@ async function showCart(ctx: Context) {
     const categoryName = getCategoryDisplayName(item.product.category);
     let itemName = item.product.name;
     if (['cotton_candy', 'popcorn', 'ice_cream_premium'].includes(item.product.category)) {
-      itemName = `${categoryName} - ${item.product.name}`;
+      if (item.product.name.toLowerCase() !== 'начос сырный') {
+        itemName = `${categoryName} - ${item.product.name}`;
+      }
     }
     text += `• ${itemName} x${item.quantity} = ${formatPrice(item.quantity * item.price_at_time)}\n`;
   }
@@ -455,7 +466,9 @@ bot.action('edit_cart', async (ctx) => {
     const categoryName = getCategoryDisplayName(item.product.category);
     let itemName = item.product.name;
     if (['cotton_candy', 'popcorn', 'ice_cream_premium'].includes(item.product.category)) {
-      itemName = `${categoryName} - ${item.product.name}`;
+      if (item.product.name.toLowerCase() !== 'начос сырный') {
+        itemName = `${categoryName} - ${item.product.name}`;
+      }
     }
     return [
       Markup.button.callback(itemName, `edit_item_${item.product_id}`)
@@ -482,7 +495,9 @@ bot.action(/edit_item_(\d+)/, async (ctx) => {
   const categoryName = getCategoryDisplayName(item.product.category);
   let itemName = item.product.name;
   if (['cotton_candy', 'popcorn', 'ice_cream_premium'].includes(item.product.category)) {
-    itemName = `${categoryName} - ${item.product.name}`;
+    if (item.product.name.toLowerCase() !== 'начос сырный') {
+      itemName = `${categoryName} - ${item.product.name}`;
+    }
   }
 
   const keyboard = Markup.inlineKeyboard([
@@ -527,7 +542,9 @@ bot.action(/update_item_qty_(\d+)_(\d+)/, async (ctx) => {
     const categoryName = getCategoryDisplayName(currentItem?.product.category || '');
     let itemName = currentItem?.product.name || '';
     if (currentItem && ['cotton_candy', 'popcorn', 'ice_cream_premium'].includes(currentItem.product.category)) {
-      itemName = `${categoryName} - ${currentItem.product.name}`;
+      if (currentItem.product.name.toLowerCase() !== 'начос сырный') {
+        itemName = `${categoryName} - ${currentItem.product.name}`;
+      }
     }
 
     return ctx.editMessageText(
