@@ -457,6 +457,36 @@ export class DatabaseService {
     }
   }
 
+  async isDeliveryOpen(): Promise<boolean> {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('is_delivery_open')
+      .eq('role', 'delivery')
+      .limit(1)
+      .maybeSingle();
+
+    if (error || !data) return true; // Default to open
+    return data.is_delivery_open;
+  }
+
+  async setDeliveryStatus(isOpen: boolean): Promise<boolean> {
+    const { error } = await supabase
+      .from('profiles')
+      .update({ is_delivery_open: isOpen })
+      .eq('role', 'delivery');
+
+    return !error;
+  }
+
+  async updateOrderPickupTime(orderId: number, pickupTime: string): Promise<boolean> {
+    const { error } = await supabase
+      .from('orders')
+      .update({ pickup_time: pickupTime })
+      .eq('id', orderId);
+
+    return !error;
+  }
+
   // Atomic order status update with race condition protection
   async atomicStatusUpdate(orderId: number, expectedStatus: string, newStatus: string): Promise<boolean> {
     if (USE_MEMORY_STORE) {

@@ -33,11 +33,15 @@ function formatOrder(order: OrderWithItems): string {
   const sector = order.sector || cachedDetails?.sector;
   const seat_row = order.seat_row || cachedDetails?.seat_row;
   const seat_number = order.seat_number || cachedDetails?.seat_number;
+  const pickup_time = (order as any).pickup_time;
 
   if (order.pickup_location === 'delivery') {
     text += `📍 Доставка: ${delivery_side === 'left' ? 'Левая' : 'Правая'} сторона, Сектор ${sector}, Ряд ${seat_row}, Место ${seat_number}\n`;
   } else {
     text += `📍 ${order.pickup_location === 'left_buffer' ? 'Левый буфет, 2 этаж' : 'Правый буфет, 2 этаж'}\n`;
+    if (pickup_time) {
+      text += `🕒 Время: ${pickup_time === 'now' ? 'Сейчас' : 'В антракте'}\n`;
+    }
   }
   
   text += `📊 Статус: ${getStatusText(order.status)}\n\n`;
@@ -596,7 +600,61 @@ bot.action(/remove_item_(\d+)/, async (ctx) => {
   await ctx.answerCbQuery('Ошибка удаления');
 });
 
-// Checkout process
+bot.action(/closed_delivery_(left|right)/, async (ctx) => {
+  const side = ctx.match[1];
+  const buffetName = side === 'left' ? 'Левый буфет, 2 этаж' : 'Правый буфет, 2 этаж';
+  const pickupLocation = side === 'left' ? 'left_buffer' : 'right_buffer';
+  const user = ctx.state.user as User;
+
+  const cartOrder = await db.getOrCreateCartOrder(user.user_id);
+  if (!cartOrder) return ctx.answerCbQuery('Ошибка корзины');
+
+  // Save side to delivery cache for routing logic even if it's pickup now
+  deliveryCache.set(cartOrder.id, { delivery_side: side });
+
+  const keyboard = Markup.inlineKeyboard([
+    [Markup.button.callback('🕒 Забрать сейчас', `set_pickup_time_${pickupLocation}_now`)],
+    [Markup.button.callback('🎭 Забрать в антракте', `set_pickup_time_${pickupLocation}_intermission`)],
+    [Markup.button.callback('⬅️ Назад', 'checkout_order')]
+  ]);
+
+  await ctx.editMessageText(
+    `Уважаемый зритель, информируем Вас, что доставка до места осуществляется только до 2 звонка, поэтому заказ будет ждать вас в *${buffetName}*. Скоро придет уведомление о готовности. Вы сможете забрать свой заказ без общей очереди перед представлением или в антракте.`,
+    { parse_mode: 'Markdown', reply_markup: keyboard.reply_markup }
+  );
+});
+
+bot.action(/set_pickup_time_(left_buffer|right_buffer)_(now|intermission)/, async (ctx) => {
+  const location = ctx.match[1];
+  const time = ctx.match[2];
+  const user = ctx.state.user as User;
+  
+  const cartOrder = await db.getOrCreateCartOrder(user.user_id);
+  if (!cartOrder) return ctx.answerCbQuery('Ошибка корзины');
+
+  await db.updateOrderPickupTime(cartOrder.id, time);
+  const success = await db.updateOrderStatus(cartOrder.id, 'pending', location);
+
+  if (success) {
+    const orderWithItems = await db.getOrderWithItems(cartOrder.id);
+    if (!orderWithItems) return ctx.answerCbQuery('Ошибка заказа');
+
+    await notifySellers(orderWithItems);
+
+    const buffetName = location === 'left_buffer' ? 'Левый буфет, 2 этаж' : 'Правый буфет, 2 этаж';
+    const timeText = time === 'now' ? 'Сейчас' : 'В антракте';
+
+    await ctx.editMessageText(
+      `✅ Заказ #${cartOrder.id} оформлен!\n\n` +
+      `📍 Место получения: ${buffetName}\n` +
+      `🕒 Время получения: ${timeText}\n` +
+      `💰 Сумма: ${formatPrice(orderWithItems.total_amount)}\n\n` +
+      `Мы сообщим вам, когда заказ будет готов!`
+    );
+  } else {
+    await ctx.answerCbQuery('Ошибка оформления');
+  }
+});
 bot.action('checkout_order', async (ctx) => {
   const keyboard = Markup.inlineKeyboard([
     [Markup.button.callback('📍 Левый буфет, 2 этаж', 'pickup_left_buffer')],
@@ -612,9 +670,20 @@ bot.action('checkout_order', async (ctx) => {
 });
 
 bot.action('pickup_delivery', async (ctx) => {
+  const isDeliveryOpen = await db.isDeliveryOpen();
+  if (!isDeliveryOpen) {
+    const keyboard = Markup.inlineKeyboard([
+      [Markup.button.callback('⬅️ Левая сторона', 'closed_delivery_left')],
+      [Markup.button.callback('➡️ Правая сторона', 'closed_delivery_right')],
+      [Markup.button.callback('⬅️ Назад', 'checkout_order')]
+    ]);
+    return ctx.editMessageText('С какой стороны зала вы находитесь?', keyboard);
+  }
+
   const keyboard = Markup.inlineKeyboard([
     [Markup.button.callback('⬅️ Левая сторона', 'delivery_side_left')],
-    [Markup.button.callback('➡️ Правая сторона', 'delivery_side_right')]
+    [Markup.button.callback('➡️ Правая сторона', 'delivery_side_right')],
+    [Markup.button.callback('⬅️ Назад', 'checkout_order')]
   ]);
   await ctx.editMessageText('Выберите сторону зала:', keyboard);
 });
@@ -691,7 +760,35 @@ async function processCheckout(ctx: Context, pickupLocation: 'left_buffer' | 'ri
       else await ctx.reply('Корзина пуста');
       return;
     }
-    
+
+    // Если это доставка, проверяем, открыта ли она
+    if (pickupLocation === 'delivery') {
+      const isDeliveryOpen = await db.isDeliveryOpen();
+      if (!isDeliveryOpen) {
+        const side = deliveryDetails.delivery_side;
+        const buffetName = side === 'left' ? 'Левый буфет, 2 этаж' : 'Правый буфет, 2 этаж';
+        const redirectedLocation = side === 'left' ? 'left_buffer' : 'right_buffer';
+        
+        // Сохраняем сторону в кэш для роутинга
+        deliveryCache.set(cartOrder.id, deliveryDetails);
+        
+        const keyboard = Markup.inlineKeyboard([
+          [Markup.button.callback('🕒 Забрать сейчас', `set_pickup_time_${redirectedLocation}_now`)],
+          [Markup.button.callback('🎭 Забрать в антракте', `set_pickup_time_${redirectedLocation}_intermission`)],
+          [Markup.button.callback('⬅️ Назад', 'checkout_order')]
+        ]);
+
+        const message = `Уважаемый зритель, информируем Вас, что доставка до места осуществляется только до 2 звонка, поэтому заказ будет ждать вас в *${buffetName}*. Скоро придет уведомление о готовности. Вы сможете забрать свой заказ без общей очереди перед представлением или в антракте.`;
+        
+        if (ctx.callbackQuery) {
+          await ctx.editMessageText(message, { parse_mode: 'Markdown', reply_markup: keyboard.reply_markup });
+        } else {
+          await ctx.reply(message, { parse_mode: 'Markdown', reply_markup: keyboard.reply_markup });
+        }
+        return;
+      }
+    }
+
     const success = await db.updateOrderStatus(cartOrder.id, 'pending', pickupLocation, deliveryDetails);
     
     if (success) {
@@ -864,13 +961,33 @@ bot.action('cancel_cancellation', async (ctx) => {
 
 // Seller functions
 async function showSellerMainMenu(ctx: Context) {
-  const keyboard = Markup.keyboard([
-    ['📥 Новые заказы', '👨‍🍳 В работе'],
-    ['✅ Готовые заказы']
-  ]).resize();
+  const user = ctx.state.user as User;
+  let buttons = [['📥 Новые заказы', '👨‍🍳 В работе'], ['✅ Готовые заказы']];
   
+  if (user.role === 'delivery') {
+    const isDeliveryOpen = await db.isDeliveryOpen();
+    buttons.push([isDeliveryOpen ? '🔴 Закрыть доставку' : '🟢 Открыть доставку']);
+  }
+  
+  buttons.push(['🔄 Обновить']);
+  
+  const keyboard = Markup.keyboard(buttons).resize();
   await ctx.reply('Панель продавца:', keyboard);
 }
+
+bot.hears('🔴 Закрыть доставку', async (ctx) => {
+  const user = ctx.state.user as User;
+  if (user.role !== 'delivery') return;
+  await db.setDeliveryStatus(false);
+  await ctx.reply('❌ Доставка закрыта. Новые заказы будут перенаправлены в буфеты.', Markup.keyboard([['📥 Новые заказы', '👨‍🍳 В работе'], ['✅ Готовые заказы'], ['🟢 Открыть доставку'], ['🔄 Обновить']]).resize());
+});
+
+bot.hears('🟢 Открыть доставку', async (ctx) => {
+  const user = ctx.state.user as User;
+  if (user.role !== 'delivery') return;
+  await db.setDeliveryStatus(true);
+  await ctx.reply('✅ Доставка открыта.', Markup.keyboard([['📥 Новые заказы', '👨‍🍳 В работе'], ['✅ Готовые заказы'], ['🔴 Закрыть доставку'], ['🔄 Обновить']]).resize());
+});
 
 bot.hears('📥 Новые заказы', async (ctx) => {
   const user = ctx.state.user as User;

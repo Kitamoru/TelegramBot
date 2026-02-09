@@ -24,6 +24,7 @@ export interface Order {
   seat_row?: string;
   seat_number?: string;
   total_amount: number;
+  pickup_time?: string;
   created_at: string;
   updated_at: string;
 }
