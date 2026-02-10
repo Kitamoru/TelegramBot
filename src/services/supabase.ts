@@ -348,6 +348,7 @@ export class DatabaseService {
   async getPendingOrdersForSeller(sellerRole: 'seller_left' | 'seller_right'): Promise<OrderWithItems[]> {
     try {
       const location = sellerRole === 'seller_left' ? 'left_buffer' : 'right_buffer';
+      const side = sellerRole === 'seller_left' ? 'left' : 'right';
       
       const { data, error } = await supabase
         .from('orders')
@@ -358,7 +359,7 @@ export class DatabaseService {
             product:products (*)
           )
         `)
-        .eq('pickup_location', location)
+        .or(`pickup_location.eq.${location},and(pickup_location.eq.delivery,delivery_side.eq.${side})`)
         .eq('status', 'pending')
         .order('created_at');
 
@@ -377,6 +378,7 @@ export class DatabaseService {
   async getActiveOrdersForSeller(sellerRole: 'seller_left' | 'seller_right'): Promise<OrderWithItems[]> {
     try {
       const location = sellerRole === 'seller_left' ? 'left_buffer' : 'right_buffer';
+      const side = sellerRole === 'seller_left' ? 'left' : 'right';
       
       const { data, error } = await supabase
         .from('orders')
@@ -387,7 +389,7 @@ export class DatabaseService {
             product:products (*)
           )
         `)
-        .eq('pickup_location', location)
+        .or(`pickup_location.eq.${location},and(pickup_location.eq.delivery,delivery_side.eq.${side})`)
         .in('status', ['preparing', 'ready_for_pickup'])
         .order('created_at');
 

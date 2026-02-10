@@ -969,8 +969,6 @@ async function showSellerMainMenu(ctx: Context) {
     buttons.push([isDeliveryOpen ? '🔴 Закрыть доставку' : '🟢 Открыть доставку']);
   }
   
-  buttons.push(['🔄 Обновить']);
-  
   const keyboard = Markup.keyboard(buttons).resize();
   await ctx.reply('Панель продавца:', keyboard);
 }
@@ -979,22 +977,28 @@ bot.hears('🔴 Закрыть доставку', async (ctx) => {
   const user = ctx.state.user as User;
   if (user.role !== 'delivery') return;
   await db.setDeliveryStatus(false);
-  await ctx.reply('❌ Доставка закрыта. Новые заказы будут перенаправлены в буфеты.', Markup.keyboard([['📥 Новые заказы', '👨‍🍳 В работе'], ['✅ Готовые заказы'], ['🟢 Открыть доставку'], ['🔄 Обновить']]).resize());
+  await ctx.reply('❌ Доставка закрыта. Новые заказы будут перенаправлены в буфеты.', Markup.keyboard([['📥 Новые заказы', '👨‍🍳 В работе'], ['✅ Готовые заказы'], ['🟢 Открыть доставку']]).resize());
 });
 
 bot.hears('🟢 Открыть доставку', async (ctx) => {
   const user = ctx.state.user as User;
   if (user.role !== 'delivery') return;
   await db.setDeliveryStatus(true);
-  await ctx.reply('✅ Доставка открыта.', Markup.keyboard([['📥 Новые заказы', '👨‍🍳 В работе'], ['✅ Готовые заказы'], ['🔴 Закрыть доставку'], ['🔄 Обновить']]).resize());
+  await ctx.reply('✅ Доставка открыта.', Markup.keyboard([['📥 Новые заказы', '👨‍🍳 В работе'], ['✅ Готовые заказы'], ['🔴 Закрыть доставку']]).resize());
 });
 
 bot.hears('📥 Новые заказы', async (ctx) => {
   const user = ctx.state.user as User;
   if (user.role === 'customer') return;
   
+  const isDeliveryOpen = await db.isDeliveryOpen();
+  
   let orders: OrderWithItems[];
   if (user.role === 'delivery') {
+    if (!isDeliveryOpen) {
+      await ctx.reply('📴 Доставка закрыта. Новые заказы перенаправляются в буфеты.');
+      return;
+    }
     orders = await db.getPendingDeliveryOrders();
   } else {
     orders = await db.getPendingOrdersForSeller(user.role as any);
