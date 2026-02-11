@@ -39,9 +39,10 @@ function formatOrder(order: OrderWithItems): string {
     text += `📍 Доставка: ${delivery_side === 'left' ? 'Левая' : 'Правая'} сторона, Сектор ${sector}, Ряд ${seat_row}, Место ${seat_number}\n`;
   } else {
     text += `📍 ${order.pickup_location === 'left_buffer' ? 'Левый буфет, 2 этаж' : 'Правый буфет, 2 этаж'}\n`;
-    if (pickup_time) {
-      text += `🕒 Время: ${pickup_time === 'now' ? 'Сейчас' : 'В антракте'}\n`;
-    }
+  }
+
+  if (pickup_time) {
+    text += `🕒 Время: ${pickup_time === 'now' ? 'Сейчас' : 'В антракте'}\n`;
   }
   
   text += `📊 Статус: ${getStatusText(order.status)}\n\n`;
