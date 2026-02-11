@@ -790,6 +790,24 @@ async function processCheckout(ctx: Context, pickupLocation: 'left_buffer' | 'ri
       }
     }
 
+    // Если это буфет, спрашиваем время
+    if (pickupLocation === 'left_buffer' || pickupLocation === 'right_buffer') {
+      const buffetName = pickupLocation === 'left_buffer' ? 'Левый буфет, 2 этаж' : 'Правый буфет, 2 этаж';
+      const keyboard = Markup.inlineKeyboard([
+        [Markup.button.callback('🕒 Забрать сейчас', `set_pickup_time_${pickupLocation}_now`)],
+        [Markup.button.callback('🎭 Забрать в антракте', `set_pickup_time_${pickupLocation}_intermission`)],
+        [Markup.button.callback('⬅️ Назад', 'checkout_order')]
+      ]);
+
+      const message = `Вы выбрали: *${buffetName}*.\nКогда вы планируете забрать заказ?`;
+      if (ctx.callbackQuery) {
+        await ctx.editMessageText(message, { parse_mode: 'Markdown', reply_markup: keyboard.reply_markup });
+      } else {
+        await ctx.reply(message, { parse_mode: 'Markdown', reply_markup: keyboard.reply_markup });
+      }
+      return;
+    }
+
     const success = await db.updateOrderStatus(cartOrder.id, 'pending', pickupLocation, deliveryDetails);
     
     if (success) {
