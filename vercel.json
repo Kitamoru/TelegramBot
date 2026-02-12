@@ -1,7 +1,8 @@
 {
   "version": 2,
   "functions": {
-    "api/bot.ts": {
+    "src/api/bot.ts": {
+      "runtime": "nodejs20.x",
       "memory": 1024,
       "maxDuration": 10
     }
@@ -9,7 +10,7 @@
   "rewrites": [
     {
       "source": "/api/bot",
-      "destination": "/api/bot" 
+      "destination": "/src/api/bot"
     }
   ]
 }
