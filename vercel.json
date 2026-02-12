@@ -2,7 +2,7 @@
   "version": 2,
   "functions": {
     "src/api/bot.ts": {
-      "runtime": "nodejs20.x",
+      "runtime": "@vercel/node",
       "memory": 1024,
       "maxDuration": 10
     }
