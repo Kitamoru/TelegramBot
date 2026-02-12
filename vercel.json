@@ -2,7 +2,13 @@
   "version": 2,
   "functions": {
     "api/bot.ts": {
-      "runtime": "nodejs20.x"
+      "runtime": "@vercel/node"
     }
-  }
+  },
+  "rewrites": [
+    {
+      "source": "/api/bot",
+      "destination": "/api/bot.ts"
+    }
+  ]
 }
