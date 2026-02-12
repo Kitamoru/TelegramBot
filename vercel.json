@@ -2,7 +2,7 @@
   "version": 2,
   "builds": [
     {
-      "src": "src/api/bot.ts",
+      "src": "bot.ts",
       "use": "@vercel/node@5.3.21"
     }
   ],
@@ -14,8 +14,8 @@
   },
   "rewrites": [
     {
-      "source": "/api/bot",
-      "destination": "/src/api/bot.ts"
+      "source": "/src/bot",
+      "destination": "/src/bot.ts"
     }
   ]
 }
