@@ -1,21 +1,14 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "bot.ts",
-      "use": "@vercel/node@5.3.21"
-    }
-  ],
   "functions": {
-    "src/api/bot.ts": {
-      "memory": 1024,
-      "maxDuration": 10
+    "api/bot.ts": {
+      "runtime": "@vercel/node"
     }
   },
   "rewrites": [
     {
-      "source": "/src/bot",
-      "destination": "/src/bot.ts"
+      "source": "/api/bot",
+      "destination": "/api/bot"
     }
   ]
 }
