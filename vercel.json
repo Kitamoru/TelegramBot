@@ -2,13 +2,7 @@
   "version": 2,
   "functions": {
     "api/bot.ts": {
-      "runtime": "nodejs24.x"
+      "runtime": "nodejs20.x"
     }
-  },
-  "rewrites": [
-    {
-      "source": "/api/bot",
-      "destination": "/api/bot"
-    }
-  ]
+  }
 }
