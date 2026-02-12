@@ -2,7 +2,7 @@
   "version": 2,
   "functions": {
     "api/bot.ts": {
-      "runtime": "@vercel/node@"
+      "runtime": "nodejs24.x"
     }
   },
   "rewrites": [
