@@ -1,18 +1,14 @@
 {
   "version": 2,
+  "outputDirectory": ".", 
   "functions": {
     "api/bot.ts": {
-      "memory": 1024,
-      "maxDuration": 10
+      "runtime": "@vercel/node"
     }
   },
   "rewrites": [
     {
       "source": "/api/bot",
-      "destination": "/api/bot"
-    },
-    {
-      "source": "/(.*)",
       "destination": "/api/bot"
     }
   ]
